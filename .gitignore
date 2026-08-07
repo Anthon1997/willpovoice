@@ -7,3 +7,10 @@ installer/output/
 logs/
 *.log
 .vscode/
+
+/ARM64/
+/x64/
+/x86/
+/Installer.exe
+*.zip
+output/*.wav
