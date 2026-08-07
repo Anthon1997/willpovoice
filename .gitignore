@@ -21,3 +21,10 @@ output/*.wav
 /Installer.exe
 *.zip
 output/*.wav
+
+/ARM64/
+/x64/
+/x86/
+/Installer.exe
+*.zip
+output/*.wav
