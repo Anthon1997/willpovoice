@@ -1,12 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_data_files
+
+datas = [('assets', 'assets')]
+datas += collect_data_files('docx')
 
 
 a = Analysis(
     ['run.py'],
     pathex=[],
     binaries=[],
-    datas=[('assets\\icons', 'assets\\icons')],
-    hiddenimports=[],
+    datas=datas,
+    hiddenimports=['pypdf', 'docx', 'lameenc', 'win32com'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

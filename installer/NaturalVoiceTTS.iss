@@ -1,5 +1,5 @@
 ﻿#define MyAppName "WillpoVoice"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.2.0"
 #define MyAppPublisher "WillpoVoice"
 #define MyAppExeName "WillpoVoice.exe"
 
@@ -28,6 +28,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Crear acceso directo en el escritorio"; GroupDescription: "Opciones adicionales:"; Flags: unchecked
 
 [Files]
+Source: "adapter_config.reg"; DestDir: "{tmp}"; Flags: confirmoverwrite
 Source: "..\dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\third_party\NaturalVoiceSAPIAdapter\*"; DestDir: "{app}\redist"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -37,11 +38,13 @@ Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
+Filename: "{win}\regedit.exe"; Parameters: "/s ""{tmp}\adapter_config.reg"""; StatusMsg: "Aplicando configuracion de 321 voces..."; Flags: runhidden waituntilterminated
 Filename: "regsvr32"; Parameters: "/s ""{app}\redist\x64\NaturalVoiceSAPIAdapter.dll"""; StatusMsg: "Registrando voces Natural..."; Flags: runhidden waituntilterminated
 Filename: "{app}\{#MyAppExeName}"; Description: "Ejecutar {#MyAppName} ahora"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
 Filename: "regsvr32"; Parameters: "/u /s ""{app}\redist\x64\NaturalVoiceSAPIAdapter.dll"""; Flags: runhidden waituntilterminated
+Filename: "{sys}\reg.exe"; Parameters: "delete ""HKCU\SOFTWARE\NaturalVoiceSAPIAdapter"" /f"; Flags: runhidden waituntilterminated
 
 [Messages]
 SetupAppTitle=Instalación
@@ -71,6 +74,9 @@ ButtonFinish=&Finalizar
 ButtonCancel=Cancelar
 
 SelectTasksLabel2=Selecciona las tareas adicionales que deben realizarse durante la instalación de WillpoVoice y pulsa Siguiente.
+
+
+
 
 
 
