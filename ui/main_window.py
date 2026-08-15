@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import logging
 import sys
@@ -6,12 +6,13 @@ from urllib.parse import quote
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, Qt, QThread, QTimer, QUrl, Signal, QSize
-from PySide6.QtGui import QBrush, QColor, QCursor, QDesktopServices, QIcon, QFont, QLinearGradient, QMovie, QImageReader, QPainter, QPainterPath, QPen, QPixmap, QTransform
+from PySide6.QtGui import QBrush, QColor, QCursor, QDesktopServices, QIcon, QFont, QLinearGradient, QMovie, QImageReader, QPainter, QPainterPath, QPen, QPixmap, QPolygon, QTransform
 from PySide6.QtCore import QPoint, QRect, QRectF, QSize
 from PySide6.QtWidgets import (
     QComboBox,
     QColorDialog,
     QDialog,
+QDockWidget,
     QFileDialog,
     QFrame,
     QGroupBox,
@@ -19,6 +20,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QProgressBar,
+QScrollArea,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -27,6 +29,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QGraphicsDropShadowEffect,
     QSlider,
+QSizePolicy,
     QStyledItemDelegate,
     QToolButton,
     QVBoxLayout,
@@ -64,7 +67,7 @@ class ShineProgressBar(QProgressBar):
 
         bg = QPainterPath()
         bg.addRoundedRect(0, 0, self.width(), self.height(), 6, 6)
-        painter.fillPath(bg, QColor("#0d222b"))
+        painter.fillPath(bg, QColor("#1a2236"))
 
         fraction = 0
 
@@ -80,7 +83,7 @@ class ShineProgressBar(QProgressBar):
             prog.addRoundedRect(0, 0, pw, self.height(), 6, 6)
 
             grad = QLinearGradient(0, 0, self.width(), 0)
-            grad.setColorAt(0, QColor("#1780a8"))
+            grad.setColorAt(0, QColor("#4a7dff"))
             grad.setColorAt(1, QColor("#4de3b0"))
             painter.fillPath(prog, grad)
 
@@ -179,7 +182,8 @@ class ExportWorker(QThread):
         import wave
 
         try:
-            chunks = self._split_chunks(self.text)
+            from core.text_normalizer import normalize_for_tts
+            chunks = self._split_chunks(normalize_for_tts(self.text))
             total = len(chunks)
             tmp_paths = []
             futures_idx = {}
@@ -493,6 +497,99 @@ from core import file_reader
 from core import license_manager
 
 
+def _lic_pix(kind, color, s=18):
+    from PySide6.QtCore import QPointF, QRectF
+    from PySide6.QtGui import QPolygonF, QBrush
+    import math
+    pix = QPixmap(s, s)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    c = QColor(color)
+    p.setPen(QPen(c, 1.5))
+    m = s / 18.0
+    if kind == "monitor":
+        p.drawRoundedRect(QRectF(2*m, 3*m, 14*m, 10*m), 2, 2)
+        p.drawLine(QPointF(9*m, 13*m), QPointF(9*m, 15*m))
+        p.drawLine(QPointF(5*m, 15.5*m), QPointF(13*m, 15.5*m))
+    elif kind == "copy":
+        p.drawRoundedRect(QRectF(6*m, 6*m, 10*m, 10*m), 2, 2)
+        p.drawRoundedRect(QRectF(3*m, 3*m, 10*m, 10*m), 2, 2)
+    elif kind == "crown":
+        pts = [QPointF(3*m, 12.5*m), QPointF(3*m, 6.5*m), QPointF(6.5*m, 9.5*m),
+               QPointF(9*m, 4.5*m), QPointF(11.5*m, 9.5*m), QPointF(15*m, 6.5*m),
+               QPointF(15*m, 12.5*m), QPointF(3*m, 12.5*m)]
+        p.drawPolyline(QPolygonF(pts))
+        p.drawLine(QPointF(3*m, 15*m), QPointF(15*m, 15*m))
+    elif kind == "key":
+        p.drawEllipse(QRectF(3*m, 10*m, 6*m, 6*m))
+        p.drawLine(QPointF(8*m, 11*m), QPointF(15*m, 4*m))
+        p.drawLine(QPointF(12*m, 7*m), QPointF(14*m, 9*m))
+    elif kind == "info":
+        p.drawEllipse(QRectF(2*m, 2*m, 14*m, 14*m))
+        p.setBrush(QBrush(c))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawEllipse(QPointF(9*m, 5.5*m), 1.1*m, 1.1*m)
+        p.setPen(QPen(c, 1.5))
+        p.drawLine(QPointF(9*m, 8*m), QPointF(9*m, 13*m))
+    elif kind == "shield":
+        path = QPainterPath()
+        path.moveTo(9*m, 2*m)
+        path.lineTo(14.5*m, 4.2*m)
+        path.lineTo(14.5*m, 8.5*m)
+        path.quadTo(14.5*m, 13.5*m, 9*m, 16*m)
+        path.quadTo(3.5*m, 13.5*m, 3.5*m, 8.5*m)
+        path.lineTo(3.5*m, 4.2*m)
+        path.closeSubpath()
+        p.drawPath(path)
+        p.drawLine(QPointF(6.3*m, 9*m), QPointF(8.3*m, 11*m))
+        p.drawLine(QPointF(8.3*m, 11*m), QPointF(11.8*m, 6.8*m))
+    elif kind == "wa":
+        p.drawEllipse(QRectF(2.5*m, 2*m, 13*m, 13*m))
+        p.setBrush(QBrush(c))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawPolygon(QPolygonF([
+            QPointF(4.5*m, 13.5*m), QPointF(3*m, 16.5*m), QPointF(8*m, 14.8*m)]))
+        p.setPen(QPen(c, 1.5))
+        p.drawArc(QRectF(6*m, 6*m, 6*m, 6*m), 200*16, 140*16)
+    elif kind == "flask":
+        p.drawLine(QPointF(6*m, 2*m), QPointF(12*m, 2*m))
+        p.drawLine(QPointF(7*m, 2*m), QPointF(7*m, 7*m))
+        p.drawLine(QPointF(11*m, 2*m), QPointF(11*m, 7*m))
+        p.drawLine(QPointF(7*m, 7*m), QPointF(4*m, 13.5*m))
+        p.drawLine(QPointF(11*m, 7*m), QPointF(14*m, 13.5*m))
+        p.drawLine(QPointF(4*m, 13.5*m), QPointF(14*m, 13.5*m))
+        p.drawLine(QPointF(5.6*m, 10.5*m), QPointF(12.4*m, 10.5*m))
+    elif kind == "lock":
+        p.drawRoundedRect(QRectF(4*m, 8*m, 10*m, 8*m), 2, 2)
+        p.drawArc(QRectF(6*m, 3*m, 6*m, 8*m), 0, 180*16)
+    elif kind == "help":
+        p.drawEllipse(QRectF(2*m, 2*m, 14*m, 14*m))
+        p.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+        p.drawText(QRectF(2*m, 1*m, 14*m, 15*m), Qt.AlignmentFlag.AlignCenter, "?")
+    elif kind == "wave":
+        for i, h in enumerate([4, 8, 12, 8, 4]):
+            x = (3 + i * 3) * m
+            p.drawLine(QPointF(x, (9 - h / 2)*m), QPointF(x, (9 + h / 2)*m))
+    elif kind == "bolt":
+        poly = QPolygonF([QPointF(10*m, 2*m), QPointF(5*m, 10*m), QPointF(9*m, 10*m),
+                          QPointF(8*m, 16*m), QPointF(13*m, 8*m), QPointF(9*m, 8*m),
+                          QPointF(10*m, 2*m)])
+        p.drawPolyline(poly)
+    elif kind == "star":
+        pts = []
+        for i in range(10):
+            ang = math.radians(-90 + i * 36)
+            r = 7*m if i % 2 == 0 else 3*m
+            pts.append(QPointF(9*m + r*math.cos(ang), 9*m + r*math.sin(ang)))
+        p.drawPolyline(QPolygonF(pts))
+    elif kind == "x":
+        p.drawLine(QPointF(5*m, 5*m), QPointF(13*m, 13*m))
+        p.drawLine(QPointF(13*m, 5*m), QPointF(5*m, 13*m))
+    p.end()
+    return pix
+
+
 class LicenseDialog(QDialog):
     def __init__(self, parent, machine_id: str, days_left: int):
         super().__init__(parent)
@@ -500,66 +597,372 @@ class LicenseDialog(QDialog):
         self.trial_accepted = False
         self.machine_id = machine_id
 
+        BG = "#0b0f17"
+        PANEL = "#0d1117"
+        CARD = "#151a24"
+        BORDER = "#262d3a"
+        TEXT = "#e6edf3"
+        MUTED = "#8b949e"
+        PURPLE = "#7c5cff"
+        BLUE = "#58a6ff"
+        GOLD = "#f0a020"
+        RED = "#ef4444"
+        GREEN = "#2ea043"
+
         self.setWindowTitle("WillpoVoice - Licencia")
         self.setModal(True)
-        self.setFixedWidth(430)
+        self.setFixedSize(860, 620)
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
+        self.setStyleSheet(
+            f"LicenseDialog {{ background: {BG}; }}"
+            " QLabel { background: transparent; }"
+            " QLineEdit { background: transparent; border: none;"
+            f" color: {TEXT}; font-size: 12px; padding: 0; }}"
+        )
 
-        layout = QVBoxLayout(self)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
-        title = QLabel("WillpoVoice")
-        title.setStyleSheet("font-size: 20px; font-weight: 700;")
+        bar = QFrame()
+        bar.setObjectName("licbar")
+        bar.setFixedHeight(42)
+        bar.setStyleSheet(
+            f"#licbar {{ background: {PANEL}; border-bottom: 1px solid {BORDER}; }}")
+        bl = QHBoxLayout(bar)
+        bl.setContentsMargins(12, 0, 6, 0)
+        bl.setSpacing(10)
+        blogo = QLabel()
+        logo_p = MainWindow._resource_path(Path("assets") / "icons" / "logo.png")
+        if not logo_p.exists():
+            logo_p = MainWindow._resource_path(Path("assets") / "icons" / "icon.ico")
+        if logo_p.exists():
+            blogo.setPixmap(QPixmap(str(logo_p)).scaledToHeight(
+                18, Qt.TransformationMode.SmoothTransformation))
+        bl.addWidget(blogo)
+        btitle = QLabel("WillpoVoice - Licencia")
+        btitle.setStyleSheet(f"color: {TEXT}; font-size: 12px; font-weight: 600;")
+        bl.addWidget(btitle)
+        bl.addStretch()
+        close_btn = QPushButton()
+        close_btn.setFixedSize(34, 34)
+        close_btn.setIcon(QIcon(_lic_pix("x", TEXT, 14)))
+        close_btn.setIconSize(QSize(14, 14))
+        close_btn.setStyleSheet(
+            "QPushButton { background: transparent; border: none;"
+            " border-radius: 8px; }"
+            f" QPushButton:hover {{ background: {CARD}; }}"
+        )
+        close_btn.clicked.connect(self.reject)
+        bl.addWidget(close_btn)
+        root.addWidget(bar)
+
+        body = QHBoxLayout()
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(0)
+        root.addLayout(body, 1)
+
+        left = QFrame()
+        left.setObjectName("licleft")
+        left.setFixedWidth(230)
+        left.setStyleSheet(
+            f"#licleft {{ background: #0a0d13; border-right: 1px solid {BORDER}; }}")
+        lv = QVBoxLayout(left)
+        lv.setContentsMargins(0, 0, 0, 0)
+        lv.setSpacing(10)
+        img = QLabel()
+        img.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        img.setMinimumHeight(300)
+        img.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding)
+        left_img = MainWindow._resource_path(
+            Path("assets") / "icons" / "licencia_left.png")
+        if not left_img.exists():
+            left_img = MainWindow._resource_path(
+                Path("assets") / "icons" / "portada.png")
+        if left_img.exists():
+            img.setPixmap(QPixmap(str(left_img)))
+            img.setScaledContents(True)
+        lv.addWidget(img, 1)
+        pcard = QFrame()
+        pcard.setObjectName("pcard")
+        pcard.setStyleSheet(
+            "#pcard { background: rgba(18,21,29,235);"
+            f" border: 1px solid {BORDER}; border-radius: 12px; }}")
+        pv = QVBoxLayout(pcard)
+        pv.setContentsMargins(14, 14, 14, 14)
+        pv.setSpacing(12)
+        pt = QLabel(
+            f'WillpoVoice <span style="color:#8b7bff; font-weight:700;">'
+            'Premium</span>')
+        pt.setStyleSheet(f"color: {TEXT}; font-size: 13px; font-weight: 700;")
+        pv.addWidget(pt)
+        feats = [
+            ("wave", "Voces naturales<br>de alta calidad"),
+            ("bolt", "Conversiones rapidas<br>e ilimitadas"),
+            ("shield", "Soporte prioritario<br>y actualizaciones"),
+            ("star", "Nuevas voces<br>todas las semanas"),
+        ]
+        for kind, txt in feats:
+            row = QHBoxLayout()
+            row.setSpacing(12)
+            row.setContentsMargins(0, 0, 0, 0)
+            ic = QLabel()
+            ic.setFixedSize(18, 18)
+            ic.setPixmap(_lic_pix(kind, "#d7dde7", 16))
+            ic.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            row.addWidget(ic)
+            lb = QLabel(txt)
+            lb.setStyleSheet("color: #c9d1d9; font-size: 11px;")
+            row.addWidget(lb)
+            row.addStretch()
+            pv.addLayout(row)
+        pwrap = QHBoxLayout()
+        pwrap.setContentsMargins(26, 0, 26, 14)
+        pwrap.addWidget(pcard)
+        lv.addLayout(pwrap, 0)
+        body.addWidget(left)
+
+        neon = QFrame()
+        neon.setFixedWidth(2)
+        neon.setStyleSheet(
+            "background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
+            " stop:0 rgba(124,92,255,30), stop:0.5 #7c5cff,"
+            " stop:1 rgba(124,92,255,30));")
+        from PySide6.QtWidgets import QGraphicsDropShadowEffect
+        ne = QGraphicsDropShadowEffect(neon)
+        ne.setBlurRadius(14)
+        ne.setOffset(0, 0)
+        ne.setColor(QColor("#7c5cff"))
+        neon.setGraphicsEffect(ne)
+        body.addWidget(neon)
+
+        right = QWidget()
+        right.setObjectName("licright")
+        right.setStyleSheet(
+            "#licright { background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
+            " stop:0 #0d1220, stop:1 #0b0e14); }")
+        rv = QVBoxLayout(right)
+        rv.setContentsMargins(30, 16, 30, 10)
+        rv.setSpacing(10)
+
+        logo = QLabel()
+        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        if logo_p.exists():
+            logo.setPixmap(QPixmap(str(logo_p)).scaledToHeight(
+                62, Qt.TransformationMode.SmoothTransformation))
+        rv.addWidget(logo)
+
+        title = QLabel(
+            '<span style="color:#ffffff; font-weight:800;">Willpo</span>'
+            '<span style="color:#8b7bff; font-weight:800;">Voice</span>')
+        title.setStyleSheet("font-size: 30px; background: transparent;")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(title)
+        rv.addWidget(title)
 
-        info = QLabel(f"ID de esta maquina: {machine_id}")
-        info.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        info.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        layout.addWidget(info)
+        subtitle = QLabel("Convierte texto en voz con voces naturales")
+        subtitle.setStyleSheet(f"color: {MUTED}; font-size: 12px;")
+        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        rv.addWidget(subtitle)
+        rv.addSpacing(4)
 
+        id_card = QFrame()
+        id_card.setObjectName("idcard")
+        id_card.setFixedHeight(46)
+        id_card.setStyleSheet(
+            f"#idcard {{ background: {CARD}; border: 1px solid {BORDER};"
+            " border-radius: 10px; }")
+        il = QHBoxLayout(id_card)
+        il.setContentsMargins(14, 0, 8, 0)
+        il.setSpacing(10)
+        mic = QLabel()
+        mic.setPixmap(_lic_pix("monitor", PURPLE, 16))
+        il.addWidget(mic)
+        idl = QLabel("ID de esta maquina:")
+        idl.setStyleSheet(f"color: {TEXT}; font-size: 12px;")
+        il.addWidget(idl)
+        il.addStretch()
+        idv = QLabel(machine_id)
+        idv.setStyleSheet(f"color: {BLUE}; font-size: 14px; font-weight: 700;")
+        il.addWidget(idv)
+        copy_btn = QPushButton()
+        copy_btn.setFixedSize(30, 30)
+        copy_btn.setIcon(QIcon(_lic_pix("copy", MUTED, 14)))
+        copy_btn.setIconSize(QSize(14, 14))
+        copy_btn.setStyleSheet(
+            "QPushButton { background: transparent; border: none;"
+            " border-radius: 8px; }"
+            f" QPushButton:hover {{ background: {BORDER}; }}"
+        )
+        copy_btn.setToolTip("Copiar ID de maquina")
+        copy_btn.clicked.connect(self._copy_id)
+        il.addWidget(copy_btn)
+        rv.addWidget(id_card)
+
+        trial_card = QFrame()
+        trial_card.setObjectName("trialcard")
+        trial_card.setFixedHeight(46)
+        trial_card.setStyleSheet(
+            f"#trialcard {{ background: {CARD}; border: 1px solid {BORDER};"
+            " border-radius: 10px; }")
+        tl = QHBoxLayout(trial_card)
+        tl.setContentsMargins(14, 0, 14, 0)
+        tl.addStretch()
+        cr = QLabel()
+        cr.setPixmap(_lic_pix("crown", GOLD, 16))
+        tl.addWidget(cr)
         if days_left >= 0:
-            trial = QLabel(f"Prueba gratuita: {days_left} dia(s) restante(s)")
+            tr_txt = (
+                'Prueba gratuita:  <span style="color:' + GOLD + ';'
+                ' font-weight:700;">' + str(days_left) +
+                ' dia(s) restante(s)</span>')
         else:
-            trial = QLabel("El periodo de prueba ha terminado.")
+            tr_txt = (
+                '<span style="color:' + RED + '; font-weight:700;">'
+                'El periodo de prueba ha terminado.</span>')
+        trl = QLabel(tr_txt)
+        trl.setStyleSheet(f"color: {TEXT}; font-size: 12px;")
+        tl.addWidget(trl)
+        tl.addStretch()
+        rv.addWidget(trial_card)
+        rv.addSpacing(2)
 
-        trial.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(trial)
+        kl = QLabel("Ingresa tu clave de licencia:")
+        kl.setStyleSheet(f"color: {TEXT}; font-size: 12px;")
+        rv.addWidget(kl)
 
-        layout.addWidget(QLabel("Ingresa tu clave de licencia:"))
-
+        keyframe = QFrame()
+        keyframe.setObjectName("keyframe")
+        keyframe.setFixedHeight(44)
+        keyframe.setStyleSheet(
+            f"#keyframe {{ background: #10141c; border: 1.5px solid {PURPLE};"
+            " border-radius: 10px; }")
+        kf = QHBoxLayout(keyframe)
+        kf.setContentsMargins(14, 0, 14, 0)
+        kf.setSpacing(10)
+        kicon = QLabel()
+        kicon.setPixmap(_lic_pix("key", PURPLE, 16))
+        kf.addWidget(kicon)
         self.key_edit = QLineEdit()
-        self.key_edit.setPlaceholderText("WVP-XXXX-XXXX-XXXX-XXXX")
-        layout.addWidget(self.key_edit)
+        self.key_edit.setPlaceholderText(
+            "WVP-XXXX-XXXX-XXXX-XXXX  o  WVP2-...")
+        kf.addWidget(self.key_edit)
+        rv.addWidget(keyframe)
 
-        row = QHBoxLayout()
+        hint_row = QHBoxLayout()
+        hint_row.setSpacing(8)
+        hi = QLabel()
+        hi.setPixmap(_lic_pix("info", MUTED, 14))
+        hint_row.addWidget(hi)
+        self.hint_label = QLabel(
+            "Puedes encontrar tu clave en el correo de compra.")
+        self.hint_label.setStyleSheet(f"color: {MUTED}; font-size: 10.5px;")
+        hint_row.addWidget(self.hint_label)
+        hint_row.addStretch()
+        rv.addLayout(hint_row)
+        rv.addSpacing(2)
 
-        activate = QPushButton("Activar")
+        activate = QPushButton("Activar Licencia")
+        activate.setFixedHeight(44)
+        activate.setCursor(Qt.CursorShape.PointingHandCursor)
+        activate.setIcon(QIcon(_lic_pix("shield", "#ffffff", 18)))
+        activate.setIconSize(QSize(18, 18))
+        activate.setStyleSheet(
+            "QPushButton { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+            " stop:0 #6d5df0, stop:0.5 #7c5cff, stop:1 #6d5df0);"
+            " color: white; border: none; border-radius: 10px;"
+            " font-size: 14px; font-weight: 700; }"
+            " QPushButton:hover { background: #8d75ff; }"
+        )
         activate.clicked.connect(self.try_activate)
-        row.addWidget(activate)
+        rv.addWidget(activate)
 
+        row2 = QHBoxLayout()
+        row2.setSpacing(10)
         buy = QPushButton("Comprar por WhatsApp")
+        buy.setFixedHeight(42)
+        buy.setCursor(Qt.CursorShape.PointingHandCursor)
+        buy.setIcon(QIcon(_lic_pix("wa", GREEN, 16)))
+        buy.setIconSize(QSize(16, 16))
+        buy.setStyleSheet(
+            f"QPushButton {{ background: transparent; color: {GREEN};"
+            f" border: 1px solid {GREEN}; border-radius: 10px;"
+            " font-size: 12px; font-weight: 600; }"
+            " QPushButton:hover { background: rgba(46,160,67,35); }"
+        )
         buy.clicked.connect(self.open_whatsapp)
-        row.addWidget(buy)
-
+        row2.addWidget(buy, 1)
         if days_left >= 0:
             trial_btn = QPushButton("Continuar en prueba")
+            trial_btn.setFixedHeight(42)
+            trial_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            trial_btn.setIcon(QIcon(_lic_pix("flask", "#c9d1d9", 16)))
+            trial_btn.setIconSize(QSize(16, 16))
+            trial_btn.setStyleSheet(
+                f"QPushButton {{ background: transparent; color: #c9d1d9;"
+                f" border: 1px solid {BORDER}; border-radius: 10px;"
+                " font-size: 12px; font-weight: 600; }"
+                f" QPushButton:hover {{ border-color: {MUTED}; }}"
+            )
             trial_btn.clicked.connect(self.accept_trial)
-            row.addWidget(trial_btn)
+            row2.addWidget(trial_btn, 1)
+        rv.addLayout(row2)
 
-        layout.addLayout(row)
+        sep = QFrame()
+        sep.setFixedHeight(1)
+        sep.setStyleSheet(f"background: {BORDER};")
+        rv.addWidget(sep)
 
-        self.error_label = QLabel("")
-        self.error_label.setStyleSheet("color: #e05252;")
-        self.error_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.error_label)
+        footer = QHBoxLayout()
+        footer.setSpacing(8)
+        lo = QLabel()
+        lo.setPixmap(_lic_pix("lock", MUTED, 13))
+        footer.addWidget(lo)
+        fl = QLabel("Tu informacion esta 100% segura y encriptada.")
+        fl.setStyleSheet(f"color: {MUTED}; font-size: 10.5px;")
+        footer.addWidget(fl)
+        footer.addStretch()
+        help_btn = QPushButton("Necesitas ayuda?")
+        help_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        help_btn.setIcon(QIcon(_lic_pix("help", BLUE, 14)))
+        help_btn.setIconSize(QSize(14, 14))
+        help_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; color: {BLUE};"
+            " border: none; font-size: 11px; font-weight: 600; }"
+            " QPushButton:hover { text-decoration: underline; }"
+        )
+        help_btn.clicked.connect(self.open_whatsapp)
+        footer.addWidget(help_btn)
+        rv.addLayout(footer)
+        body.addWidget(right, 1)
+
+        self._drag_pos = None
+
+    def _copy_id(self):
+        from PySide6.QtWidgets import QApplication
+        QApplication.clipboard().setText(self.machine_id)
+        self.hint_label.setText("ID copiado al portapapeles.")
+        self.hint_label.setStyleSheet("color: #58a6ff; font-size: 10.5px;")
+
+    def mousePressEvent(self, event):
+        self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+
+    def mouseMoveEvent(self, event):
+        if self._drag_pos is not None:
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
+
+    def mouseReleaseEvent(self, event):
+        self._drag_pos = None
 
     def try_activate(self) -> None:
         key = self.key_edit.text()
-
         if license_manager.validate_key(key, self.machine_id):
             self.activated_key = "".join(key.strip().upper().split())
             self.accept()
         else:
-            self.error_label.setText("Clave invalida para esta maquina.")
+            self.hint_label.setText("Clave invalida para esta maquina.")
+            self.hint_label.setStyleSheet("color: #ef4444; font-size: 10.5px;")
 
     def open_whatsapp(self) -> None:
         msg = quote(
@@ -573,7 +976,299 @@ class LicenseDialog(QDialog):
         self.accept()
 
 
+
+PREMIUM_PHOTOS = {
+    "andrew": "ms_andrew.png",
+    "ava": "ms_ava.png",
+    "brian": "ms_brian.png",
+    "emma": "ms_emma.png",
+    "florian": "ms_florian.png",
+    "giuseppe": "ms_giuseppe.png",
+    "hyunsu": "ms_hyunsu.png",
+    "remy": "ms_remy.png",
+    "seraphina": "ms_seraphina.png",
+    "william": "ms_william.png",
+    "vivienne": "ms_vivienne.png",
+    "thalita": "ms_thalita.png",
+    "elvira": "ms_elvira.png",
+    "alonso": "ms_alonso.png",
+    "dalia": "ms_dalia.png",
+}
+
+FEMALE_NAMES = (
+    "helena", "sabina", "elena", "elvira", "dalia", "paloma", "zira",
+    "susan", "jenny", "aria", "michelle", "ashley", "heera",
+    "katja", "hortense", "elsa", "laura", "conchita", "lucia",
+    "valeria", "sofia", "paula", "camila", "francisca", "marina",
+    "irene", "joana", "carmen", "penelope", "yara", "mariana",
+    "isabela", "nuria", "libby", "maisie", "natasha", "clara",
+    "cora", "layla", "sonia", "xiaoxiao", "yaoyao", "vivienne",
+    "thalita", "emma", "ava", "seraphina", "ines", "maria",
+    "ana", "diana", "sara", "vera", "nina",
+)
+
+MALE_NAMES = (
+    "tomas", "jorge", "alvaro", "alonso", "raul", "pablo", "juan",
+    "diego", "carlos", "enrique", "david", "guy", "davis",
+    "brandon", "eric", "stephane", "stefan", "willem", "cosimo",
+    "george", "harry", "ryan", "thomas", "andrew", "brian",
+    "florian", "giuseppe", "hyunsu", "remy", "william", "liam",
+    "noah", "james", "pedro", "mateo", "sebastian", "oscar",
+    "hugo", "ivan", "sergio", "andres", "felipe",
+)
+
+
+
+class PreviewWorker(QThread):
+    def __init__(self, adapter, voice, text):
+        super().__init__()
+        self.adapter = adapter
+        self.voice = voice
+        self.text = text
+
+    def run(self):
+        import pythoncom
+        import win32com.client
+        pythoncom.CoInitialize()
+        try:
+            sapi = win32com.client.Dispatch("SAPI.SpVoice")
+            if self.adapter is not None:
+                if self.voice:
+                    self.adapter.set_voice(self.voice)
+                try:
+                    sapi.Voice = self.adapter.sapi.Voice
+                except Exception:
+                    pass
+            sapi.Rate = 0
+            sapi.Volume = 100
+            sapi.Speak(self.text)
+        finally:
+            pythoncom.CoUninitialize()
+
+
+class VoiceRow(QFrame):
+    def __init__(self, window, voice_name, premium, photo_path=None, parent=None):
+        super().__init__(parent)
+        self.window = window
+        self.voice_name = voice_name
+        self.premium = premium
+        self._selected = False
+        self.setFixedHeight(58)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(8, 8, 6, 8)
+        layout.setSpacing(8)
+
+        photo = QLabel()
+        photo.setFixedSize(36, 36)
+        source = None
+        if photo_path is not None:
+            pp = Path(photo_path)
+            if pp.exists():
+                source = QPixmap(str(pp))
+        ring = "#ffd75e" if premium else "#232f4b"
+        if source is not None and not source.isNull():
+            pix = self._avatar_pixmap(source, 36, ring)
+        else:
+            pix = self._initials_pixmap(ring)
+        photo.setPixmap(pix)
+        photo.setStyleSheet("background: transparent;")
+        layout.addWidget(photo)
+
+        texts_widget = QWidget()
+        texts_widget.setStyleSheet("background: transparent;")
+        texts = QVBoxLayout(texts_widget)
+        texts.setContentsMargins(0, 0, 0, 0)
+        texts.setSpacing(1)
+        name_label = QLabel(self._display_name())
+        name_label.setStyleSheet(
+            "color: #eef2fa; font-size: 12px; font-weight: 700; "
+            "background: transparent;"
+        )
+        sub_label = QLabel("WillpoVoice Premium" if premium else "Voz estandar")
+        sub_label.setStyleSheet(
+            ("color: #ffd75e;" if premium else "color: #8fa0bd;")
+            + " font-size: 10px; background: transparent;"
+        )
+        name_label.setMinimumWidth(0)
+        name_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
+        sub_label.setMinimumWidth(0)
+        sub_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
+        texts_widget.setMinimumWidth(0)
+        texts.addWidget(name_label)
+        texts.addWidget(sub_label)
+        layout.addWidget(texts_widget, 1)
+
+        self.play_btn = QPushButton()
+        self.play_btn.setFixedSize(30, 30)
+        self.play_btn.setToolTip("Hola, esta es mi voz")
+        play_pix = QPixmap(14, 14)
+        play_pix.fill(Qt.GlobalColor.transparent)
+        painter_play = QPainter(play_pix)
+        painter_play.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter_play.setBrush(QColor("#4a7dff"))
+        painter_play.setPen(Qt.PenStyle.NoPen)
+        painter_play.drawPolygon(
+            QPolygon([QPoint(3, 1), QPoint(13, 7), QPoint(3, 13)])
+        )
+        painter_play.end()
+        self.play_btn.setIcon(QIcon(play_pix))
+        self.play_btn.setIconSize(QSize(14, 14))
+        self.play_btn.setStyleSheet(
+            "QPushButton { background: #1a2236; border: none; border-radius: 15px; }"
+            "QPushButton:hover { background: #232f4b; }"
+        )
+        self.play_btn.clicked.connect(self._preview)
+        layout.addWidget(self.play_btn)
+
+        self.plus_btn = QPushButton()
+        self.plus_btn.setFixedSize(30, 30)
+        if premium:
+            plus_bg = (
+                "background: qlineargradient(x1:0,y1:0,x2:0,y2:1, "
+                "stop:0 #ffd75e, stop:1 #f79009); color: white;"
+            )
+        else:
+            plus_bg = "background: #1a2236; color: #eef2fa;"
+        self.plus_btn.setStyleSheet(
+            "QPushButton { " + plus_bg + " border: none; border-radius: 15px; "
+            "font-size: 15px; font-weight: 700; }"
+            "QPushButton:hover { border: 1px solid #4a7dff; }"
+        )
+        self.plus_btn.clicked.connect(self._select)
+        layout.addWidget(self.plus_btn)
+        self._apply_style()
+        self.mouseReleaseEvent = lambda event: self._select()
+
+    def _display_name(self):
+        n = self.voice_name.replace("Microsoft ", "")
+        if "Multilingual" in n:
+            first = n.split("Multilingual")[0].strip()
+            return f"{first} (Multilingual)"
+        n = n.replace("Online (Natural)", "").replace("(Natural)", "")
+        return n.strip()
+
+    def _avatar_pixmap(self, source: QPixmap, size: int, ring: str) -> QPixmap:
+        out = QPixmap(size, size)
+        out.fill(Qt.GlobalColor.transparent)
+        p = QPainter(out)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        clip = QPainterPath()
+        clip.addEllipse(0, 0, size, size)
+        p.setClipPath(clip)
+        scaled = source.scaled(
+            size,
+            size,
+            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        x = (scaled.width() - size) // 2
+        y = (scaled.height() - size) // 2
+        p.drawPixmap(0, 0, scaled, x, y, size, size)
+        p.setClipping(False)
+        p.setPen(QPen(QColor(ring), 2))
+        p.drawEllipse(1, 1, size - 2, size - 2)
+        p.end()
+        return out
+
+    def _initials_pixmap(self, ring: str = "#232f4b") -> QPixmap:
+        pix = QPixmap(36, 36)
+        pix.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pix)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setBrush(QColor("#1a2236"))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawEllipse(0, 0, 36, 36)
+        painter.setPen(QColor("#4a7dff"))
+        painter.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        painter.drawText(
+            QRect(0, 0, 36, 36),
+            Qt.AlignmentFlag.AlignCenter,
+            self.voice_name[:1].upper(),
+        )
+        painter.setPen(QPen(QColor(ring), 2))
+        painter.drawEllipse(1, 1, 34, 34)
+        painter.end()
+        return pix
+
+    def _plus_icon(self) -> QIcon:
+        pix = QPixmap(16, 16)
+        pix.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pix)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(
+            QPen(
+                QColor("#ffffff"),
+                2.6,
+                Qt.PenStyle.SolidLine,
+                Qt.PenCapStyle.RoundCap,
+            )
+        )
+        p.drawLine(3, 8, 13, 8)
+        p.drawLine(8, 3, 8, 13)
+        p.end()
+        return QIcon(pix)
+
+    def _check_icon(self) -> QIcon:
+        pix = QPixmap(16, 16)
+        pix.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pix)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(
+            QPen(
+                QColor("#ffffff"),
+                2.6,
+                Qt.PenStyle.SolidLine,
+                Qt.PenCapStyle.RoundCap,
+                Qt.PenJoinStyle.RoundJoin,
+            )
+        )
+        p.drawPolyline(QPolygon([QPoint(3, 8), QPoint(6, 12), QPoint(13, 4)]))
+        p.end()
+        return QIcon(pix)
+
+    def _apply_style(self):
+        if self._selected:
+            self.setStyleSheet(
+                "VoiceRow { background: #1a2236; border: 1px solid #ffd75e; "
+                "border-radius: 12px; }"
+            )
+            self.plus_btn.setIcon(self._check_icon())
+            self.plus_btn.setIconSize(QSize(16, 16))
+        else:
+            self.setStyleSheet(
+                "VoiceRow { background: #131a2b; border: 1px solid #232f4b; "
+                "border-radius: 12px; }"
+            )
+            self.plus_btn.setIcon(self._plus_icon())
+            self.plus_btn.setIconSize(QSize(16, 16))
+
+    def set_selected(self, selected):
+        self._selected = selected
+        self._apply_style()
+
+    def _select(self):
+        self.window.voice_combo.setCurrentText(self.voice_name)
+        try:
+            self.window.engine.select_voice(self.voice_name)
+        except Exception:
+            pass
+        self.window._sync_row_selection()
+        self.window.statusBar().showMessage(
+            f"Voz seleccionada: {self.voice_name}"
+        )
+
+    def _preview(self):
+        self.window._preview_voice(self.voice_name)
+
+
+
 class MainWindow(QMainWindow):
+
     MAX_HISTORY = 10
 
     def __init__(self):
@@ -582,7 +1277,7 @@ class MainWindow(QMainWindow):
         self.logger = logging.getLogger("naturalvoice_tts.ui")
         self.settings = load_settings()
 
-        self.setWindowTitle("WillpoVoice")
+        self.setWindowTitle("WillpoVoice v1.2.1")
         self.resize(950, 650)
 
         icon_path = self._resource_path(Path("assets") / "icons" / "icon.ico")
@@ -603,6 +1298,19 @@ class MainWindow(QMainWindow):
         self._load_history()
 
         self.resize(950, 650)
+        self._center_on_screen(self)
+
+    @staticmethod
+    def _center_on_screen(widget):
+        from PySide6.QtWidgets import QApplication
+        from PySide6.QtCore import QPoint
+        screen = QApplication.primaryScreen()
+        if screen is None:
+            return
+        geo = screen.availableGeometry()
+        x = geo.x() + (geo.width() - widget.width()) // 2
+        y = geo.y() + (geo.height() - widget.height()) // 2
+        widget.move(QPoint(x, y))
 
     @staticmethod
     def _resource_path(rel: Path) -> Path:
@@ -712,18 +1420,18 @@ class MainWindow(QMainWindow):
         dark = self.settings.get("dark_mode", True)
 
         if dark:
-            hot_color = QColor("#4a2c10")
+            hot_color = QColor("#2a2410")
             group_colors = {
-                "es": QColor("#123524"),
-                "desktop": QColor("#1d2f45"),
-                "en": QColor("#2b2b33"),
+                "es": QColor("#101c33"),
+                "desktop": QColor("#131a2b"),
+                "en": QColor("#131a2b"),
             }
         else:
-            hot_color = QColor("#ffe3c2")
+            hot_color = QColor("#fff6d8")
             group_colors = {
-                "es": QColor("#d7f0e0"),
-                "desktop": QColor("#dbe7f5"),
-                "en": QColor("#e8e8ee"),
+                "es": QColor("#e8f0ff"),
+                "desktop": QColor("#eef1f6"),
+                "en": QColor("#eef1f6"),
             }
 
         hot_brush = QBrush(hot_color)
@@ -768,6 +1476,25 @@ class MainWindow(QMainWindow):
             return QIcon(str(path))
 
         return QIcon()
+
+    def _voices_icon_pixmap(self) -> QPixmap:
+        pix = QPixmap(24, 24)
+        pix.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pix)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        color = QColor("#ffd75e")
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(color)
+        p.drawEllipse(5, 4, 7, 7)
+        body = QPainterPath()
+        body.addRoundedRect(2, 13, 13, 8, 4, 4)
+        p.drawPath(body)
+        p.setBrush(Qt.GlobalColor.transparent)
+        p.setPen(QPen(color, 1.8))
+        p.drawArc(QRect(14, 7, 8, 8), -50 * 16, 100 * 16)
+        p.drawArc(QRect(15, 4, 9, 9), -50 * 16, 100 * 16)
+        p.end()
+        return pix
 
     def _build_ui(self) -> None:
         central_widget = QWidget()
@@ -841,13 +1568,51 @@ class MainWindow(QMainWindow):
         self._setup_cover()
 
         self.voice_group = QGroupBox("Voz")
-        voice_layout = QHBoxLayout(self.voice_group)
-
+        voice_layout = QVBoxLayout(self.voice_group)
         self.voice_combo = QComboBox()
+        voice_layout.addWidget(self.voice_combo)
+        self.voice_group.hide()
+
+        self.voice_search = QLineEdit()
+        self.voice_search.setPlaceholderText("Buscar voces...")
+        self.voice_search.textChanged.connect(self._filter_voice_rows)
         self.refresh_voices_button = QPushButton("Actualizar voces")
-        voice_layout.addWidget(self.voice_combo, 1)
-        voice_layout.addWidget(self.refresh_voices_button)
-        main_layout.addWidget(self.voice_group)
+
+        self.voice_scroll = QScrollArea()
+        self.voice_scroll.setWidgetResizable(True)
+        self.voice_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.voice_scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        self.voice_rows_container = QWidget()
+        self.voice_rows_container.setStyleSheet("background: transparent;")
+        self.voice_rows_layout = QVBoxLayout(self.voice_rows_container)
+        self.voice_rows_layout.setContentsMargins(0, 0, 0, 0)
+        self.voice_rows_layout.setSpacing(8)
+        self.voice_scroll.setWidget(self.voice_rows_container)
+        self.voice_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        self.voice_dock = QDockWidget("Voces", self)
+        self.voice_dock.setObjectName("voiceDock")
+        self.voice_dock.setFeatures(
+            QDockWidget.DockWidgetFeature.DockWidgetMovable
+            | QDockWidget.DockWidgetFeature.DockWidgetClosable
+        )
+        self.voice_dock.setStyleSheet(
+            "QDockWidget { background: #0a0f1c; color: #ffd75e; font-weight: 700; border: none; }"
+            "QDockWidget::title { background: #131a2b; padding: 8px; }"
+        )
+        dock_content = QWidget()
+        dock_content.setStyleSheet("background: #0a0f1c;")
+        dock_layout = QVBoxLayout(dock_content)
+        dock_layout.setContentsMargins(10, 10, 10, 10)
+        dock_layout.setSpacing(8)
+        dock_top = QHBoxLayout()
+        dock_top.addWidget(self.voice_search, 1)
+        dock_top.addWidget(self.refresh_voices_button)
+        dock_layout.addLayout(dock_top)
+        dock_layout.addWidget(self.voice_scroll, 1)
+        self.voice_dock.setWidget(dock_content)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.voice_dock)
+        self.voice_dock.setVisible(False)
 
         self.history_group = QGroupBox("Historial")
         history_layout = QHBoxLayout(self.history_group)
@@ -875,44 +1640,6 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self.history_group)
 
         palette_layout = QHBoxLayout()
-        palette_layout.addWidget(QLabel("Paleta:"))
-
-        for hex_color in PRESET_COLORS:
-            chip = QToolButton()
-            chip.setFixedSize(22, 22)
-            chip.setProperty("accent", hex_color)
-            chip.setStyleSheet(
-                f"background-color:{hex_color}; border-radius:11px; border:2px solid transparent;"
-            )
-            chip.clicked.connect(self.on_swatch_clicked)
-            palette_layout.addWidget(chip)
-            self.swatch_buttons.append(chip)
-
-        self.custom_color_button = QPushButton("Personalizar...")
-        self.custom_color_button.clicked.connect(self.pick_custom_color)
-        palette_layout.addWidget(self.custom_color_button)
-
-        self.gif_label = QLabel()
-        gif_path = self._resource_path(Path("assets") / "icons" / "palette.gif")
-
-        if gif_path.exists():
-            self.movie = QMovie(str(gif_path))
-
-            reader = QImageReader(str(gif_path))
-            original = reader.size()
-
-            target_height = 28
-
-            if original.height() > 0:
-                target_width = int(original.width() * target_height / original.height())
-            else:
-                target_width = target_height
-
-            self.movie.setScaledSize(QSize(target_width, target_height))
-            self.gif_label.setMovie(self.movie)
-            self.movie.start()
-
-        palette_layout.addWidget(self.gif_label)
         palette_layout.addStretch()
         palette_layout.addWidget(self.support_button)
         palette_layout.addWidget(self.help_button)
@@ -967,9 +1694,9 @@ class MainWindow(QMainWindow):
         self.export_menu = QMenu(self)
         self.export_menu.setMinimumWidth(260)
         self.export_menu.setStyleSheet(
-            "QMenu { background-color: #0e3a46; border: 1px solid #1f4a55; "
-            "border-radius: 6px; padding: 0px; } "
-            "QMenu::separator { height: 1px; background: #1f5a68; }"
+            "QMenu { background-color: #131a2b; border: 1px solid #232f4b; "
+            "border-radius: 12px; padding: 6px; } "
+            "QMenu::separator { height: 1px; background: #232f4b; }"
         )
         self._add_menu_row(
             self._audio_icon("#4da3ff", "WAV"),
@@ -991,9 +1718,9 @@ class MainWindow(QMainWindow):
         self.open_menu = QMenu(self)
         self.open_menu.setMinimumWidth(260)
         self.open_menu.setStyleSheet(
-            "QMenu { background-color: #0e3a46; border: 1px solid #1f4a55; "
-            "border-radius: 6px; padding: 0px; } "
-            "QMenu::separator { height: 1px; background: #1f5a68; }"
+            "QMenu { background-color: #131a2b; border: 1px solid #232f4b; "
+            "border-radius: 12px; padding: 6px; } "
+            "QMenu::separator { height: 1px; background: #232f4b; }"
         )
 
         self._add_menu_row(
@@ -1046,6 +1773,21 @@ class MainWindow(QMainWindow):
         self.open_menu.installEventFilter(self)
         self.open_file_button.setIcon(self._button_icon("folder.png"))
 
+        self.voices_button = QPushButton("Voces")
+        self.voices_button.setIcon(self._button_icon("multi_0.png"))
+        self.voices_button.setIconSize(QSize(18, 18))
+        self.header_widget.layout().insertWidget(
+            0,
+            self.voices_button,
+            0,
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft,
+        )
+        self.voices_button.setStyleSheet(
+            "QPushButton { background: #131a2b; border: 1px solid #ffd75e; "
+            "border-radius: 10px; color: #ffd75e; font-weight: 700; "
+            "padding: 8px 16px; }"
+            "QPushButton:hover { background: #1a2236; }"
+        )
         self.theme_button = QPushButton("Modo claro")
         self.theme_button.setIcon(self._button_icon("theme.png"))
 
@@ -1090,6 +1832,7 @@ class MainWindow(QMainWindow):
         self.open_file_button.clicked.connect(self._show_open_menu)
         self.theme_button.clicked.connect(self.toggle_theme)
         self.refresh_voices_button.clicked.connect(self.refresh_voices)
+        self.voices_button.clicked.connect(self.toggle_voice_dock)
         self.clear_history_button.clicked.connect(self.clear_history)
         self.support_button.clicked.connect(self.open_support)
 
@@ -1270,7 +2013,7 @@ class MainWindow(QMainWindow):
         row.setCursor(Qt.CursorShape.PointingHandCursor)
         row.setStyleSheet(
             "QFrame#openMenuRow { background: transparent; } "
-            "QFrame#openMenuRow:hover { background: #1596a8; } "
+            "QFrame#openMenuRow:hover { background: #1a2236; } "
             "QFrame#openMenuRow QLabel { background: transparent; }"
         )
 
@@ -1283,7 +2026,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(icon_label)
 
         text_label = QLabel(label)
-        text_label.setStyleSheet("color: #eaf7f4;")
+        text_label.setStyleSheet("color: #eef2fa;")
         layout.addWidget(text_label)
         layout.addStretch()
 
@@ -1401,7 +2144,7 @@ class MainWindow(QMainWindow):
             self,
             targets=[
                 None,
-                "voice_combo",
+                "voices_button",
                 "text_edit",
                 "rate_slider",
                 "speak_button",
@@ -1429,6 +2172,16 @@ class MainWindow(QMainWindow):
             license_manager.get_machine_id(),
             days_left if state == "trial" else -1,
         )
+        dialog.setWindowFlags(
+            dialog.windowFlags()
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.Dialog
+        )
+        dialog.adjustSize()
+        self._center_on_screen(dialog)
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
         dialog.exec()
 
         if dialog.activated_key:
@@ -1445,24 +2198,27 @@ class MainWindow(QMainWindow):
         dark = self.settings.get("dark_mode", True)
 
         self.setStyleSheet(build_qss(accent, dark))
+        self._apply_titlebar()
         self.theme_button.setText("Modo claro" if dark else "Modo oscuro")
 
         accent_color = QColor(accent)
         hover = accent_color.lighter(125).name()
         pressed = accent_color.darker(125).name()
 
+        teal_btn = "#4de3b0" if dark else "#0fa87a"
         button_style = (
             "QPushButton {"
-            f" background-color: {accent_color.name()};"
+            " background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #4de3b0, stop:1 #4a7dff);"
             " color: white;"
-            f" border: 1px solid {pressed};"
+            " border: 1px solid rgba(255,255,255,0.08);"
             " border-radius: 10px;"
             " padding: 8px 18px;"
             " font-size: 13px;"
-            " font-weight: 600;"
+            " font-weight: 700;"
             " }"
-            f" QPushButton:hover {{ background-color: {hover}; }}"
-            f" QPushButton:pressed {{ background-color: {pressed}; }}"
+            " QPushButton:hover { background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #5ff0c0, stop:1 #5a8dff); border: 1px solid rgba(255,255,255,0.18); }"
+            " QPushButton:pressed { background: #3a63d8; }"
+            " QPushButton:disabled { background: #1a2236; color: #9aa7bd; border: 1px solid #182238; }"
         )
 
         for btn in (
@@ -1485,31 +2241,31 @@ class MainWindow(QMainWindow):
         sat = min(accent_color.hslSaturation(), 150)
 
         if dark:
-            group_bg = QColor.fromHsl(hue, sat, 38).name()
-            group_border = QColor.fromHsl(hue, sat, 60).name()
-            window_bg = QColor.fromHsl(hue, sat, 30).name()
+            group_top = "#161f36"
+            group_bottom = "#111828"
+            group_border = "#182238"
         else:
-            group_bg = "#ffffff"
-            group_border = "#000000"
-            window_bg = "#f5f6fa"
+            group_top = "#ffffff"
+            group_bottom = "#f2f5fa"
+            group_border = "#e2e8f2"
 
+        title_color = "#4de3b0" if dark else "#0fa87a"
         group_style = (
             "QGroupBox {"
-            f" background-color: {group_bg};"
-            f" border: 2px solid {group_border};"
-            " border-radius: 10px;"
-            " margin-top: 14px;"
-            " padding: 14px 8px 8px 8px;"
+            f" background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 {group_top}, stop:1 {group_bottom});"
+            f" border: 1px solid {group_border};"
+            " border-radius: 14px;"
+            " margin-top: 18px;"
+            " padding: 18px 12px 12px 12px;"
             " }"
             " QGroupBox::title {"
             " subcontrol-origin: margin;"
             " subcontrol-position: top left;"
-            " left: 12px;"
-            " padding: 2px 8px;"
+            " left: 16px;"
+            " padding: 0px 6px;"
             " font-weight: 700;"
-            f" color: {group_border};"
-            f" background-color: {window_bg};"
-            " border-radius: 4px;"
+            f" color: {title_color};"
+            " background: transparent;"
             " }"
         )
 
@@ -1526,18 +2282,29 @@ class MainWindow(QMainWindow):
                 f"border:2px solid {'#ffffff' if active else 'transparent'};"
             )
 
-    def on_swatch_clicked(self) -> None:
-        chip = self.sender()
-        self.settings["accent"] = chip.property("accent")
-        self._apply_theme()
+    def _apply_titlebar(self) -> None:
+        try:
+            import ctypes
 
-    def pick_custom_color(self) -> None:
-        initial = QColor(self.settings.get("accent", "#0E639C"))
-        color = QColorDialog.getColor(initial, self, "Elige tu color corporativo")
+            dark = self.settings.get("dark_mode", True)
+            if dark:
+                caption = 0x001C0F0A
+                textcol = 0x00FAF2EE
+            else:
+                caption = 0x00FAF7F5
+                textcol = 0x0036221A
+            hwnd = int(self.winId())
+            dwm = ctypes.windll.dwmapi
+            dwm.DwmSetWindowAttribute(
+                hwnd, 35, ctypes.byref(ctypes.c_uint32(caption)), 4
+            )
+            dwm.DwmSetWindowAttribute(
+                hwnd, 36, ctypes.byref(ctypes.c_uint32(textcol)), 4
+            )
+        except Exception:
+            pass
 
-        if color.isValid():
-            self.settings["accent"] = color.name()
-            self._apply_theme()
+
 
     def toggle_theme(self) -> None:
         self.settings["dark_mode"] = not self.settings.get("dark_mode", True)
@@ -1728,14 +2495,14 @@ class MainWindow(QMainWindow):
                 return "en"
 
             headers = [
-                ("multi", "MULTILINGUAL - hablan cualquier idioma, ultra realistas"),
+                ("multi", "Recomendadas - WillpoVoice Premium"),
                 ("es", "Español"),
                 ("desktop", "ESTANDAR - funcionan sin internet"),
                 ("en", "INGLES"),
             ]
 
             header_colors = {
-                "multi": "#ff6a00",
+                "multi": "#ffd75e",
                 "es": "#2ea043",
                 "desktop": "#1f6feb",
                 "en": "#8c8c96",
@@ -1877,6 +2644,7 @@ class MainWindow(QMainWindow):
                 self._banner_delegate = BannerDelegate(self)
                 self.voice_combo.setItemDelegate(self._banner_delegate)
 
+            self._build_voice_rows(voices)
             last_voice = self.settings.get("last_voice", "")
 
             if last_voice and last_voice in voices:
@@ -1909,6 +2677,337 @@ class MainWindow(QMainWindow):
                 "Error",
                 f"No se pudieron cargar las voces:\n{exc}",
             )
+
+    def _filter_voices(self, text: str) -> None:
+        q = text.strip().lower()
+        view = self.voice_combo.view()
+        model = self.voice_combo.model()
+        for i in range(self.voice_combo.count()):
+            is_header = not model.item(i).isEnabled()
+            label = self.voice_combo.itemText(i).lower()
+            view.setRowHidden(i, bool(q) and not is_header and q not in label)
+
+    def _preview_voice(self, voice_name):
+        self.statusBar().showMessage("Reproduciendo: Hola, esta es mi voz...")
+        self._preview_worker = PreviewWorker(
+            self.engine.adapter, voice_name, "Hola, esta es mi voz."
+        )
+        self._preview_worker.start()
+
+    def _sync_row_selection(self):
+        current = self.voice_combo.currentText()
+        for row, name in getattr(self, "_voice_rows", []):
+            row.set_selected(name == current)
+
+    def _toggle_section(self, gid):
+        self._section_expanded[gid] = not self._section_expanded.get(gid, False)
+        self._update_section_ui(gid)
+        self._refresh_rows_visibility()
+
+    def _update_section_ui(self, gid):
+        header = self._section_headers.get(gid)
+        if header is None:
+            return
+        title, count, _ = self._section_titles[gid]
+        expanded = self._section_expanded.get(gid, False)
+        arrow = "▼" if expanded else "▶"
+        header.setText(f"{arrow}  {title}  ({count})")
+
+    def _refresh_rows_visibility(self):
+        q = (self.voice_search.text() or "").strip().lower()
+        for gid, rows in self._section_rows.items():
+            expanded = self._section_expanded.get(gid, False)
+            any_match = False
+            for row in rows:
+                match = q in row.voice_name.lower()
+                any_match = any_match or match
+                if q:
+                    row.setVisible(match)
+                else:
+                    row.setVisible(expanded)
+            header = self._section_headers.get(gid)
+            if header is not None:
+                header.setVisible(True if not q else any_match)
+
+    def _filter_voice_rows(self, text):
+        self._refresh_rows_visibility()
+
+    def _voice_photo(self, voice_name, premium):
+        low = voice_name.lower()
+        for key, fname in PREMIUM_PHOTOS.items():
+            if key in low:
+                return self._resource_path(Path("assets") / "icons" / fname)
+        first = (
+            voice_name.replace("Microsoft ", "")
+            .split(" ")[0]
+            .strip()
+            .lower()
+        )
+        female_names = {
+            "carmen", "belen", "mercedes", "flor", "noor", "mar",
+            "soledad", "paz", "nieves",
+        }
+        male_names = {"joshua", "luca", "elias", "noah", "jonah"}
+        if first in female_names:
+            female = True
+        elif first in male_names:
+            female = False
+        else:
+            female = first.endswith("a")
+        fname = "face_f.png" if female else "face_m.png"
+        return self._resource_path(Path("assets") / "icons" / fname)
+
+
+    def _build_voice_rows(self, voices):
+        container = getattr(self, "voice_rows_container", None)
+        if container is None:
+            return
+        layout = self.voice_rows_layout
+        while layout.count():
+            item = layout.takeAt(0)
+            w = item.widget() if item else None
+            if w is not None:
+                w.deleteLater()
+        self._voice_rows = []
+        self._section_rows = {}
+        self._section_headers = {}
+
+        premium_keys = set(PREMIUM_PHOTOS)
+
+        def group_of(name):
+            lower = name.lower()
+            if "multilingual" in lower:
+                return "multi"
+            if any(k in lower for k in premium_keys):
+                return "multi"
+            if "spanish" in lower or "español" in lower or "(es" in lower:
+                return "es"
+            if "desktop" in lower:
+                return "desktop"
+            return "en"
+
+        seen = set()
+        unique_voices = []
+        for v in voices:
+            if v not in seen:
+                seen.add(v)
+                unique_voices.append(v)
+
+        sections = [
+            ("multi", "RECOMENDADAS - PREMIUM", "#ffd75e"),
+            ("es", "ESPANOL", "#8fa0bd"),
+            ("desktop", "ESTANDAR - SIN INTERNET", "#8fa0bd"),
+            ("en", "INGLES", "#8fa0bd"),
+        ]
+        for gid, title, color in sections:
+            members = [v for v in unique_voices if group_of(v) == gid]
+            if not members:
+                continue
+            header = QLabel(title)
+            header.setStyleSheet(
+                f"color: {color}; font-size: 10px; font-weight: 700; "
+                "letter-spacing: 1px; background: transparent; "
+                "padding: 8px 4px 2px 4px;"
+            )
+            self._section_headers[gid] = header
+            layout.addWidget(header)
+            rows = []
+            for v in members:
+                premium = gid == "multi"
+                photo = self._voice_photo(v, premium)
+                row = VoiceRow(self, v, premium, photo)
+                layout.addWidget(row)
+                rows.append(row)
+                self._voice_rows.append((row, v))
+            self._section_rows[gid] = rows
+        layout.addStretch()
+        self._sync_row_selection()
+
+
+    def _ensure_voice_panel(self) -> None:
+        if getattr(self, "voice_panel", None) is not None:
+            return
+        from PySide6.QtWidgets import QDockWidget, QScrollArea
+
+        panel = QDockWidget("Voces - WillpoVoice", self)
+        panel.setObjectName("voiceDock")
+        panel.setFeatures(
+            QDockWidget.DockWidgetFeature.DockWidgetMovable
+            | QDockWidget.DockWidgetFeature.DockWidgetClosable
+        )
+        panel.setStyleSheet(
+            "QDockWidget { background: #0a0f1c; color: #ffd75e; "
+            "font-weight: 700; border: none; }"
+            "QDockWidget::title { background: #131a2b; padding: 8px; }"
+        )
+        content = QWidget()
+        content.setStyleSheet("background: #0a0f1c;")
+        lay = QVBoxLayout(content)
+        lay.setContentsMargins(12, 12, 12, 12)
+        lay.setSpacing(10)
+
+        search = QLineEdit()
+        search.setPlaceholderText("Buscar voces...")
+        search.setFixedHeight(34)
+        lay.addWidget(search)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        scroll.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; }"
+        )
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        rows_layout = QVBoxLayout(container)
+        rows_layout.setContentsMargins(0, 0, 4, 0)
+        rows_layout.setSpacing(6)
+        scroll.setWidget(container)
+        lay.addWidget(scroll, 1)
+
+        panel.setWidget(content)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, panel)
+        panel.setMinimumWidth(340)
+        self.voice_panel = panel
+        self.voice_search = search
+        self.voice_rows_layout = rows_layout
+        self.voice_rows_container = container
+        self.voice_scroll = scroll
+        self._build_voice_rows(self.engine.get_available_voices())
+        search.textChanged.connect(self._filter_voice_rows)
+
+    def toggle_voice_dock(self) -> None:
+        self._ensure_voice_panel()
+        panel = self.voice_panel
+        if panel.isVisible():
+            panel.hide()
+        else:
+            panel.setMinimumWidth(320)
+            panel.show()
+            QTimer.singleShot(
+                50,
+                lambda: self.resizeDocks(
+                    [panel], [340], Qt.Orientation.Horizontal
+                ),
+            )
+
+    def _preview_voice(self, voice_name):
+        self.statusBar().showMessage("Reproduciendo: Hola, esta es mi voz...")
+        self._preview_worker = PreviewWorker(
+            self.engine.adapter, voice_name, "Hola, esta es mi voz."
+        )
+        self._preview_worker.start()
+
+    def _sync_row_selection(self):
+        current = self.voice_combo.currentText()
+        for row, name in getattr(self, "_voice_rows", []):
+            row.set_selected(name == current)
+
+    def _filter_voice_rows(self, text):
+        q = (text or "").strip().lower()
+        for gid, rows in getattr(self, "_section_rows", {}).items():
+            any_match = False
+            for row in rows:
+                match = q in row.voice_name.lower()
+                row.setVisible(match)
+                any_match = any_match or match
+            header = self._section_headers.get(gid)
+            if header is not None:
+                header.setVisible(any_match)
+
+    def _build_voice_rows(self, voices):
+        container = getattr(self, "voice_rows_container", None)
+        if container is None:
+            return
+        layout = self.voice_rows_layout
+        while layout.count():
+            item = layout.takeAt(0)
+            w = item.widget() if item else None
+            if w is not None:
+                w.deleteLater()
+        self._voice_rows = []
+        self._section_rows = {}
+        self._section_headers = {}
+
+        premium_keys = set(PREMIUM_PHOTOS)
+
+        def group_of(name):
+            lower = name.lower()
+            if "multilingual" in lower:
+                return "multi"
+            if any(k in lower for k in premium_keys):
+                return "multi"
+            if "spanish" in lower or "español" in lower or "(es" in lower:
+                return "es"
+            if "desktop" in lower:
+                return "desktop"
+            return "en"
+
+        def photo_for(name):
+            low = name.lower()
+            for key, fname in PREMIUM_PHOTOS.items():
+                if key in low:
+                    return self._resource_path(
+                        Path("assets") / "icons" / fname
+                    )
+            first = (
+                name.replace("Microsoft ", "")
+                .split(" ")[0]
+                .strip()
+                .lower()
+            )
+            female_names = {
+                "carmen", "belen", "mercedes", "flor", "noor", "mar",
+                "soledad", "paz", "nieves", "consuelo", "rocio",
+            }
+            male_names = {"joshua", "luca", "elias", "noah", "jonah"}
+            if first in female_names:
+                female = True
+            elif first in male_names:
+                female = False
+            else:
+                female = first.endswith("a")
+            fname = "face_f.png" if female else "face_m.png"
+            return self._resource_path(Path("assets") / "icons" / fname)
+
+        seen = set()
+        unique_voices = []
+        for v in voices:
+            if v not in seen:
+                seen.add(v)
+                unique_voices.append(v)
+
+        sections = [
+            ("multi", "RECOMENDADAS - PREMIUM", "#ffd75e"),
+            ("es", "ESPANOL", "#8fa0bd"),
+            ("desktop", "ESTANDAR - SIN INTERNET", "#8fa0bd"),
+            ("en", "INGLES", "#8fa0bd"),
+        ]
+        for gid, title, color in sections:
+            members = [v for v in unique_voices if group_of(v) == gid]
+            if not members:
+                continue
+            header = QLabel(title)
+            header.setStyleSheet(
+                f"color: {color}; font-size: 10px; font-weight: 700; "
+                "letter-spacing: 1px; background: transparent; "
+                "padding: 8px 4px 2px 4px;"
+            )
+            self._section_headers[gid] = header
+            layout.addWidget(header)
+            rows = []
+            for v in members:
+                premium = gid == "multi"
+                row = VoiceRow(self, v, premium, photo_for(v))
+                layout.addWidget(row)
+                rows.append(row)
+                self._voice_rows.append((row, v))
+            self._section_rows[gid] = rows
+        layout.addStretch()
+        self._sync_row_selection()
 
     def refresh_voices(self) -> None:
         self._load_voices()

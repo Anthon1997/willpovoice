@@ -1,5 +1,5 @@
 ﻿#define MyAppName "WillpoVoice"
-#define MyAppVersion "1.2.0"
+#define MyAppVersion "1.2.1"
 #define MyAppPublisher "WillpoVoice"
 #define MyAppExeName "WillpoVoice.exe"
 
@@ -74,6 +74,7 @@ ButtonFinish=&Finalizar
 ButtonCancel=Cancelar
 
 SelectTasksLabel2=Selecciona las tareas adicionales que deben realizarse durante la instalación de WillpoVoice y pulsa Siguiente.
+
 
 
 

@@ -159,6 +159,8 @@ class SAPIAdapter:
     def set_voice(self, query: str) -> bool:
         """
         Selecciona una voz por coincidencia parcial.
+        Si la voz ya es la actual, no toca el stream (evita
+        envenenar la sintesis con purgados redundantes).
         """
         token = self._get_voice_token(query)
 
@@ -167,6 +169,15 @@ class SAPIAdapter:
                 f"No se encontró una voz que coincida con: {query}"
             )
 
+        try:
+            actual = self.sapi.Voice.GetDescription()
+            objetivo = token.GetDescription()
+        except Exception:
+            actual, objetivo = "", "x"
+        if actual and objetivo and actual == objetivo:
+            return True
+
+        self.stop()
         try:
             self.sapi.Voice = token
             self.logger.info("Voz seleccionada: %s", query)
@@ -187,6 +198,34 @@ class SAPIAdapter:
         except Exception:
             return None
 
+    def _new_sapi(self) -> None:
+        """
+        Crea una instancia SAPI nueva conservando voz, rate y
+        volumen. Las voces Online quedan envenenadas tras un
+        purgado en mitad de la lectura; una instancia fresca
+        garantiza que el siguiente Speak arranque.
+        """
+        import win32com.client
+        voz, rate, vol = None, 0, 100
+        try:
+            voz = self.sapi.Voice
+            rate = self.sapi.Rate
+            vol = self.sapi.Volume
+        except Exception:
+            pass
+        nuevo = win32com.client.Dispatch("SAPI.SpVoice")
+        try:
+            if voz is not None:
+                nuevo.Voice = voz
+        except Exception:
+            pass
+        try:
+            nuevo.Rate = rate
+            nuevo.Volume = vol
+        except Exception:
+            pass
+        self.sapi = nuevo
+
     def speak(self, text: str, asynchronous: bool = False) -> None:
         """
         Reproduce texto.
@@ -196,6 +235,7 @@ class SAPIAdapter:
         if not text or not text.strip():
             raise ValueError("El texto a reproducir no puede estar vacío.")
 
+        self._new_sapi()
         flags = 0
 
         if asynchronous:

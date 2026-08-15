@@ -12,7 +12,13 @@ def main() -> int:
     try:
         from PySide6.QtWidgets import QApplication, QMessageBox
 
-        from ui.main_window import MainWindow
+        try:
+
+            from ui.modern_window import MainWindow
+
+        except Exception:
+
+            from ui.main_window import MainWindow
     except ImportError as exc:
         print(
             "Faltan dependencias para ejecutar la interfaz gráfica.\n"

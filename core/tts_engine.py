@@ -88,6 +88,17 @@ class TTSEngine:
             raise ValueError("El texto no puede estar vacío.")
 
         self.logger.info("Reproduciendo texto de forma asíncrona.")
+        from core.text_normalizer import (
+            needs_homograph_guard,
+            normalize_for_tts,
+        )
+        desc = ""
+        try:
+            desc = self.adapter.sapi.Voice.GetDescription()
+        except Exception:
+            desc = ""
+        text = normalize_for_tts(
+            text, guard=needs_homograph_guard(desc))
         self.adapter.speak(text, asynchronous=True)
 
     def stop(self) -> None:
