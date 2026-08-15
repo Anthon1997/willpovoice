@@ -1,11 +1,11 @@
 ﻿[Setup]
 AppName=WillpoVoice
-AppVersion=1.2.2
+AppVersion=1.2.3
 AppPublisher=WillpoTech
 DefaultDirName={autopf}\WillpoVoice
 DefaultGroupName=WillpoVoice
 OutputDir=dist
-OutputBaseFilename=WillpoVoice-Setup-1.2.2
+OutputBaseFilename=WillpoVoice-Setup-1.2.3
 SetupIconFile=assets\icons\icon.ico
 UninstallDisplayIcon={app}\WillpoVoice.exe
 Compression=lzma2/ultra64
