@@ -23,3 +23,6 @@ secrets.json
 config.local.json
 .license
 license.key
+
+# Output de instaladores viejos
+installer/output/
