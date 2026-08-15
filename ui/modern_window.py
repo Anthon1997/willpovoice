@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import logging
 import sys
@@ -632,7 +632,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.logger = logging.getLogger("naturalvoice_tts.ui")
         self.settings = load_settings()
-        self.setWindowTitle("WillpoVoice v1.2.3")
+        self.setWindowTitle("WillpoVoice v1.2.4")
         self.resize(1280, 800)
         self.setMinimumSize(980, 640)
         icon_path = self._resource_path(Path("assets") / "icons" / "icon.ico")
@@ -734,9 +734,9 @@ class MainWindow(QMainWindow):
         return n.replace("Online (Natural)", "").replace("(Natural)", "").strip()
 
     def _voice_subtitle(self, name, premium):
-        subs = ["Acento neutro Â· Profesional", "Acento suave Â· Natural",
-                "Acento cÃ¡lido Â· Amigable", "Acento claro Â· Formal"]
-        return subs[len(name) % len(subs)] if premium else "Voz estÃ¡ndar"
+        subs = ["Acento neutro · Profesional", "Acento suave · Natural",
+                "Acento cálido · Amigable", "Acento claro · Formal"]
+        return subs[len(name) % len(subs)] if premium else "Voz estándar"
 
     def _add_neon(self, widget, color):
         eff = QGraphicsDropShadowEffect(widget)
@@ -810,7 +810,7 @@ def _build_ui(self):
     self._logo_name.setStyleSheet(
         f"color: {TEXT}; font-size: 15px; font-weight: 700; background: transparent;"
     )
-    self._logo_ver = QLabel("v1.2.3")
+    self._logo_ver = QLabel("v1.2.4")
     self._logo_ver.setAlignment(Qt.AlignmentFlag.AlignCenter)
     self._logo_ver.setStyleSheet(
         f"color: {MUTED}; font-size: 10px; background: transparent;"
@@ -848,12 +848,12 @@ def _build_ui(self):
     )
     pl = QVBoxLayout(self._prem_card)
     pl.setContentsMargins(14, 14, 14, 14)
-    pt = QLabel("ðŸ‘‘  WillpoVoice Premium")
+    pt = QLabel("👑  WillpoVoice Premium")
     pt.setStyleSheet(f"color: {TEXT}; font-size: 12px; font-weight: 700; background: transparent;")
     pd = QLabel("Desbloquea todas las voces y funciones premium.")
     pd.setWordWrap(True)
     pd.setStyleSheet(f"color: {MUTED}; font-size: 10px; background: transparent;")
-    pb = QPushButton("âœ¨ Ver planes")
+    pb = QPushButton("✨ Ver planes")
     pb.setCursor(Qt.CursorShape.PointingHandCursor)
     pb.setStyleSheet(
         "QPushButton { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
@@ -944,7 +944,7 @@ def _build_ui(self):
     cl.addLayout(top)
 
     self.text_edit = QPlainTextEdit()
-    self.text_edit.setPlaceholderText("Escribe aquÃ­ el texto que quieres convertir a voz...")
+    self.text_edit.setPlaceholderText("Escribe aquí el texto que quieres convertir a voz...")
     self.text_edit.setFixedHeight(120)
     self.text_edit.setMinimumWidth(150)
     self.text_edit.setStyleSheet(
@@ -979,7 +979,7 @@ def _build_ui(self):
         f"color: {MUTED}; font-size: 11px; background: transparent;"
     )
     self.lang_combo = QComboBox()
-    self.lang_combo.addItems(["EspaÃ±ol (EspaÃ±a)", "InglÃ©s (EEUU)", "Todos"])
+    self.lang_combo.addItems(["Español (España)", "Inglés (EEUU)", "Todos"])
     self.lang_combo.setItemIcon(0, QIcon(self._flag_pixmap("es")))
     self.lang_combo.setItemIcon(1, QIcon(self._flag_pixmap("us")))
     self.lang_combo.setItemIcon(2, QIcon(self._flag_pixmap("world")))
@@ -1023,7 +1023,7 @@ def _build_ui(self):
     sel.addLayout(col2, 1)
     cl.addLayout(sel)
 
-    self.adv_button = QPushButton("ï¼ž  Opciones avanzadas")
+    self.adv_button = QPushButton("＞  Opciones avanzadas")
     self.adv_button.setCursor(Qt.CursorShape.PointingHandCursor)
     self.adv_button.setStyleSheet(
         f"QPushButton {{ background: {CARD2}; color: {TEXT}; border: 1px solid {BORDER}; border-radius: 10px; padding: 8px 14px; text-align: left; }}"
@@ -1175,7 +1175,7 @@ def _build_ui(self):
     pr4 = QVBoxLayout(page4)
     pt4 = QLabel("Proyectos")
     pt4.setStyleSheet(f"color: {TEXT}; font-size: 20px; font-weight: 700;")
-    ps4 = QLabel("PrÃ³ximamente podrÃ¡s guardar y organizar tus proyectos de voz.")
+    ps4 = QLabel("Próximamente podrás guardar y organizar tus proyectos de voz.")
     ps4.setStyleSheet(f"color: {MUTED}; font-size: 13px;")
     pr4.addWidget(pt4)
     pr4.addWidget(ps4)
@@ -1188,7 +1188,7 @@ def _build_ui(self):
     at5 = QLabel("Ajustes")
     at5.setStyleSheet(f"color: {TEXT}; font-size: 20px; font-weight: 700;")
     row5 = QHBoxLayout()
-    row5.addWidget(QLabel("LÃ­mite de caracteres:"))
+    row5.addWidget(QLabel("Límite de caracteres:"))
     self.limit_spin = QSpinBox()
     self.limit_spin.setRange(500, 20000)
     self.limit_spin.setSingleStep(500)
@@ -1249,8 +1249,8 @@ def _build_ui(self):
     tabs = QHBoxLayout()
     tabs.setSpacing(4)
     self.rtab_all = TabButton("Todas")
-    self.rtab_pro = TabButton("ðŸ‘‘ Premium")
-    self.rtab_fav = TabButton("â¤ Favoritas")
+    self.rtab_pro = TabButton("👑 Premium")
+    self.rtab_fav = TabButton("❤ Favoritas")
     self.rtab_all.set_active(True)
     tabs.addWidget(self.rtab_all)
     tabs.addWidget(self.rtab_pro)
@@ -1656,11 +1656,11 @@ def _toggle_adv(self):
     show = not self.adv_widget.isVisible()
     self.adv_widget.setVisible(show)
     self.adv_button.setText(
-        "ï¼ž  Opciones avanzadas" if not show else "ï¼œ  Opciones avanzadas")
+        "＞  Opciones avanzadas" if not show else "＜  Opciones avanzadas")
 
 
 def _toggle_theme_msg(self):
-    self.statusBar().showMessage("Tema claro: prÃ³ximamente.")
+    self.statusBar().showMessage("Tema claro: próximamente.")
 
 
 def _fmt_time(self, s):
@@ -1814,7 +1814,7 @@ def stop_speech(self):
         self.time_cur.setText("0:00")
         self.time_tot.setText("0:00")
         self.progress_slider.setValue(0)
-        self.statusBar().showMessage("ReproducciÃ³n detenida.")
+        self.statusBar().showMessage("Reproducción detenida.")
     except Exception as exc:
         QMessageBox.warning(self, "Error", f"No se pudo detener: {exc}")
 
@@ -1887,8 +1887,8 @@ def on_export_ok(self, path):
                                 f"No se pudo convertir a MP3: {exc}")
             return
     self.statusBar().showMessage(f"Audio guardado en: {final_path}")
-    QMessageBox.information(self, "ExportaciÃ³n exitosa",
-                            f"El audio se guardÃ³ en: {final_path}")
+    QMessageBox.information(self, "Exportación exitosa",
+                            f"El audio se guardó en: {final_path}")
 
 
 def on_export_error(self, message):
@@ -1966,7 +1966,7 @@ def show_help(self):
         "2. Escribe o pega tu texto.\n"
         "3. Pulsa Reproducir para escucharlo.\n"
         "4. Usa Exportar para guardar WAV/MP3.\n"
-        "5. Marca voces con el corazÃ³n para favoritas.")
+        "5. Marca voces con el corazón para favoritas.")
 
 
 def _check_license(self):
@@ -2513,12 +2513,17 @@ class UpdateDialog(QDialog):
         self.dl_btn.setEnabled(True)
 
     def install_and_quit(self, path):
-        from PySide6.QtCore import QProcess
+        import ctypes
         from PySide6.QtWidgets import QApplication
         self.status.setText("Instalando... la app se cerrara.")
-        QProcess.startDetached(
-            path, ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"])
-        QApplication.quit()
+        args = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART"
+        ret = ctypes.windll.shell32.ShellExecuteW(
+            None, "runas", path, args, None, 1)
+        if ret > 32:
+            QApplication.quit()
+        else:
+            self.status.setText("Instalacion cancelada por el usuario.")
+            self.dl_btn.setEnabled(True)
 
 
 def _check_updates(self):
