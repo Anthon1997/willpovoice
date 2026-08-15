@@ -1,29 +1,32 @@
-# NaturalVoice TTS
+# WillpoVoice v1.2.1
 
-Aplicación de escritorio para conversión de texto a voz
+Aplicacion profesional de Text-to-Speech con voces naturales de Microsoft SAPI, incluyendo NaturalVoice Online (Multilingual).
 
-## Características
+## Caracteristicas
 
-- Conversión de texto a voz.
-- Selección de voces.
-- Control de velocidad.
-- Control de volumen.
-- Interfaz gráfica con PySide6.
-- Arquitectura modular.
-- Pruebas automatizadas con pytest.
-- Empaquetado con PyInstaller.
+- Reproductor profesional con pausa/reanuda real e instantanea
+- Linea de tiempo sincronizada con la lectura real del narrador
+- Cambio de voz en caliente con auto-reproduccion desde el inicio
+- Normalizacion de voz avanzada (numeros, homografos, ingles, simbolos)
+- Preview de voz sin romper el reproductor
+- Exportacion a WAV con procesamiento paralelo
+- Sistema de licencias con KeyGen offline
 
-## Requisitos
+## Instalacion
 
-- Windows 10/11
-- Python 3.11 o superior
-- NaturalVoiceSAPIAdapter instalado
+### Con instalador (recomendado)
+Ejecutar \WillpoVoice-Setup-1.2.1.exe
+### Portable
+Ejecutar \WillpoVoice.exe\ directamente
 
-## Instalación
+## Desarrollo
 
-```bash
+\\powershell
 python -m venv .venv
-.venv\Scripts\activate
-pip install --upgrade pip
+.\.venv\Scriptsctivate
 pip install -r requirements.txt
-pip install -r requirements-dev.txt
+python run.py
+\
+## Contacto
+
+WillpoTech
