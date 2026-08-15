@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import logging
 import sys
@@ -350,7 +350,7 @@ class SpotlightOverlay(QWidget):
 
 class HelpWizard(QDialog):
     STEPS = [
-        ("Bienvenido a WillpoVoice", "Esta guia te enseña paso a paso como convertir texto en voz con las voces disponibles."),
+        ("Bienvenido a WillpoVoice", "Esta guia te enseÃ±a paso a paso como convertir texto en voz con las voces disponibles."),
         ("1. Elige una voz", "En el desplegable superior selecciona la voz que quieras: las MULTILINGUAL hablan cualquier idioma de manera fluida."),
         ("2. Escribe tu texto", "En el cuadro central escribe o pega el texto que quieres escuchar. Tambien puedes pulsar 'Abrir TXT' para cargar un archivo de texto completo."),
         ("3. Ajusta velocidad y volumen", "Con las barras inferiores controlas que tan rapido habla la voz y que tan fuerte suena."),
@@ -1277,7 +1277,7 @@ class MainWindow(QMainWindow):
         self.logger = logging.getLogger("naturalvoice_tts.ui")
         self.settings = load_settings()
 
-        self.setWindowTitle("WillpoVoice v1.2.1")
+        self.setWindowTitle("WillpoVoice v1.2.2")
         self.resize(950, 650)
 
         icon_path = self._resource_path(Path("assets") / "icons" / "icon.ico")
@@ -1647,7 +1647,7 @@ class MainWindow(QMainWindow):
 
         self.text_edit = QPlainTextEdit()
         self.text_edit.setPlaceholderText(
-            "Escribe aquí el texto que quieres convertir a voz..."
+            "Escribe aquÃ­ el texto que quieres convertir a voz..."
         )
         main_layout.addWidget(self.text_edit, 1)
 
@@ -2470,7 +2470,7 @@ class MainWindow(QMainWindow):
                 if "multilingual" in lower:
                     return (0, lower)
 
-                if "spanish" in lower or "español" in lower or "(es" in lower:
+                if "spanish" in lower or "espaÃ±ol" in lower or "(es" in lower:
                     return (1, lower)
 
                 if "desktop" in lower:
@@ -2486,7 +2486,7 @@ class MainWindow(QMainWindow):
                 if "multilingual" in lower:
                     return "multi"
 
-                if "spanish" in lower or "español" in lower or "(es" in lower:
+                if "spanish" in lower or "espaÃ±ol" in lower or "(es" in lower:
                     return "es"
 
                 if "desktop" in lower:
@@ -2496,7 +2496,7 @@ class MainWindow(QMainWindow):
 
             headers = [
                 ("multi", "Recomendadas - WillpoVoice Premium"),
-                ("es", "Español"),
+                ("es", "EspaÃ±ol"),
                 ("desktop", "ESTANDAR - funcionan sin internet"),
                 ("en", "INGLES"),
             ]
@@ -2710,7 +2710,7 @@ class MainWindow(QMainWindow):
             return
         title, count, _ = self._section_titles[gid]
         expanded = self._section_expanded.get(gid, False)
-        arrow = "▼" if expanded else "▶"
+        arrow = "â–¼" if expanded else "â–¶"
         header.setText(f"{arrow}  {title}  ({count})")
 
     def _refresh_rows_visibility(self):
@@ -2780,7 +2780,7 @@ class MainWindow(QMainWindow):
                 return "multi"
             if any(k in lower for k in premium_keys):
                 return "multi"
-            if "spanish" in lower or "español" in lower or "(es" in lower:
+            if "spanish" in lower or "espaÃ±ol" in lower or "(es" in lower:
                 return "es"
             if "desktop" in lower:
                 return "desktop"
@@ -2940,7 +2940,7 @@ class MainWindow(QMainWindow):
                 return "multi"
             if any(k in lower for k in premium_keys):
                 return "multi"
-            if "spanish" in lower or "español" in lower or "(es" in lower:
+            if "spanish" in lower or "espaÃ±ol" in lower or "(es" in lower:
                 return "es"
             if "desktop" in lower:
                 return "desktop"
@@ -3047,13 +3047,13 @@ class MainWindow(QMainWindow):
     def stop_speech(self) -> None:
         try:
             self.engine.stop()
-            self.statusBar().showMessage("Reproducción detenida.")
+            self.statusBar().showMessage("ReproducciÃ³n detenida.")
         except Exception as exc:
-            self.logger.exception("Error al detener la reproducción.")
+            self.logger.exception("Error al detener la reproducciÃ³n.")
             QMessageBox.warning(
                 self,
                 "Error",
-                f"No se pudo detener la reproducción:\n{exc}",
+                f"No se pudo detener la reproducciÃ³n:\n{exc}",
             )
 
     def _show_export_menu(self) -> None:
@@ -3296,8 +3296,8 @@ class MainWindow(QMainWindow):
 
         QMessageBox.information(
             self,
-            "Exportación exitosa",
-            f"El audio se guardó correctamente en:\n{final_path}",
+            "ExportaciÃ³n exitosa",
+            f"El audio se guardÃ³ correctamente en:\n{final_path}",
         )
 
     def on_export_error(self, message: str) -> None:
@@ -3316,7 +3316,7 @@ class MainWindow(QMainWindow):
             save_settings(self.settings)
             self.engine.stop()
         except Exception:
-            self.logger.exception("Error al cerrar la aplicación.")
+            self.logger.exception("Error al cerrar la aplicaciÃ³n.")
 
         event.accept()
 
