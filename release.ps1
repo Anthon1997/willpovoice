@@ -1,4 +1,4 @@
-﻿# Uso: .\release.ps1 1.2.4 "Notas de la version"
+﻿# Uso: .\release.ps1 1.2.7 "Notas de la version"
 param(
     [Parameter(Mandatory=$true)][string]$Version,
     [string]$Notes = "Mejoras y correcciones."
@@ -34,6 +34,11 @@ git push
 $remote = git remote get-url origin
 $remote -match "github\.com[:/]([^/]+)/([^/.]+)" | Out-Null
 $ghrepo = "$($matches[1])/$($matches[2])"
-gh release delete "v$Version" --cleanup-tag --yes --repo $ghrepo 2>$null
+
+# Intentar borrar release previo (ignorar errores si no existe)
+try {
+    gh release delete "v$Version" --cleanup-tag --yes --repo $ghrepo 2>$null
+} catch {}
+
 gh release create "v$Version" $setup --repo $ghrepo --title "WillpoVoice v$Version" --notes $Notes
 Write-Host "LISTO v$Version publicado." -ForegroundColor Green

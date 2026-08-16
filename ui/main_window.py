@@ -1277,7 +1277,7 @@ class MainWindow(QMainWindow):
         self.logger = logging.getLogger("naturalvoice_tts.ui")
         self.settings = load_settings()
 
-        self.setWindowTitle("WillpoVoice v1.2.6")
+        self.setWindowTitle("WillpoVoice v1.2.7")
         self.resize(950, 650)
 
         icon_path = self._resource_path(Path("assets") / "icons" / "icon.ico")

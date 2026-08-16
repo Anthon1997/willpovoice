@@ -632,7 +632,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.logger = logging.getLogger("naturalvoice_tts.ui")
         self.settings = load_settings()
-        self.setWindowTitle("WillpoVoice v1.2.6")
+        self.setWindowTitle("WillpoVoice v1.2.7")
         self.resize(1280, 800)
         self.setMinimumSize(980, 640)
         icon_path = self._resource_path(Path("assets") / "icons" / "icon.ico")
@@ -810,7 +810,7 @@ def _build_ui(self):
     self._logo_name.setStyleSheet(
         f"color: {TEXT}; font-size: 15px; font-weight: 700; background: transparent;"
     )
-    self._logo_ver = QLabel("v1.2.6")
+    self._logo_ver = QLabel("v1.2.7")
     self._logo_ver.setAlignment(Qt.AlignmentFlag.AlignCenter)
     self._logo_ver.setStyleSheet(
         f"color: {MUTED}; font-size: 10px; background: transparent;"
@@ -1481,6 +1481,27 @@ def _refill_combo(self):
         self._icon_timer.start(60)
 
 
+def _repair_engine(self):
+    import sys, os
+    if getattr(self, "_repair_tried", False):
+        return
+    base = os.path.dirname(sys.executable) if getattr(
+        sys, "frozen", False) else os.getcwd()
+    dll = os.path.join(base, "engine", "x64",
+                       "NaturalVoiceSAPIAdapter.dll")
+    if not os.path.exists(dll):
+        return
+    self._repair_tried = True
+    import ctypes
+    ret = ctypes.windll.shell32.ShellExecuteW(
+        None, "runas", "regsvr32.exe",
+        '/s "' + dll + '"', None, 0)
+    if ret > 32:
+        from PySide6.QtCore import QTimer
+        self.statusBar().showMessage("Reparando motor de voces...")
+        QTimer.singleShot(5000, self._load_voices)
+
+
 def _on_lang_changed(self):
     self._refill_combo()
     self._rebuild_cards()
@@ -1597,6 +1618,8 @@ def _load_voices(self):
             dedup.append(v)
         voices = dedup
         self._voices = voices
+        if not any(self._is_premium(v) for v in voices):
+            self._repair_engine()
         self._refill_combo()
         names = self._lang_filtered(voices)
         last = self.settings.get("last_voice", "")
@@ -2720,3 +2743,5 @@ MainWindow._on_lang_changed = _on_lang_changed
 MainWindow._on_slider_pressed = _on_slider_pressed
 
 MainWindow._on_slider_released = _on_slider_released
+
+MainWindow._repair_engine = _repair_engine
