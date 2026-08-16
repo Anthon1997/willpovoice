@@ -21,9 +21,11 @@ from PySide6.QtWidgets import (
 from PySide6.QtWidgets import QSpacerItem
 from app.config import load_settings, save_settings
 from core import file_reader, license_manager
+from core import trial_tokens
 from core.audio_exporter import AudioExporter
 from core.tts_engine import TTSEngine
-from ui.main_window import ExportWorker, LicenseDialog
+from ui.main_window import (ExportWorker, LicenseDialog,
+    TrialActivatedDialog)
 
 BG = "#0b0f1a"
 SIDE_BG = "#0d1220"
@@ -632,7 +634,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.logger = logging.getLogger("naturalvoice_tts.ui")
         self.settings = load_settings()
-        self.setWindowTitle("WillpoVoice v1.2.7")
+        self.setWindowTitle("WillpoVoice v1.2.8")
         self.resize(1280, 800)
         self.setMinimumSize(980, 640)
         icon_path = self._resource_path(Path("assets") / "icons" / "icon.ico")
@@ -810,7 +812,7 @@ def _build_ui(self):
     self._logo_name.setStyleSheet(
         f"color: {TEXT}; font-size: 15px; font-weight: 700; background: transparent;"
     )
-    self._logo_ver = QLabel("v1.2.7")
+    self._logo_ver = QLabel("v1.2.8")
     self._logo_ver.setAlignment(Qt.AlignmentFlag.AlignCenter)
     self._logo_ver.setStyleSheet(
         f"color: {MUTED}; font-size: 10px; background: transparent;"
@@ -840,6 +842,24 @@ def _build_ui(self):
         btn.clicked.connect(lambda _=False, f=fn: f())
         sb.addWidget(btn)
         self._nav.append((btn, -1))
+        self._token_chip_icon = QLabel()
+        self._token_chip_icon.setPixmap(make_icon("coins", "#f5b544", 14))
+        self._token_chip_text = QLabel("")
+        self._token_chip_text.setStyleSheet(
+            "color: #f5b544; font-weight: 700;"
+            " font-size: 12px; background: transparent;")
+        self._token_chip_wrap = QFrame()
+        chw = QHBoxLayout(self._token_chip_wrap)
+        chw.setContentsMargins(10, 6, 10, 6)
+        chw.setSpacing(8)
+        self._token_chip_icon.setFixedSize(16, 16)
+        chw.addWidget(self._token_chip_icon)
+        chw.addWidget(self._token_chip_text)
+        chw.addStretch(1)
+        self._token_chip_wrap.setStyleSheet(
+            "QFrame { background: transparent; border: none; }")
+        self._token_chip_wrap.setVisible(False)
+        sb.addWidget(self._token_chip_wrap)
     sb.addStretch()
     self._prem_card = QFrame()
     self._prem_card.setStyleSheet(
@@ -860,7 +880,7 @@ def _build_ui(self):
         f" stop:0 {BLUE}, stop:1 {PURPLE}); color: white; border: none;"
         " border-radius: 8px; padding: 7px 12px; font-weight: 600; }"
     )
-    pb.clicked.connect(self.open_support)
+    pb.clicked.connect(self._open_plans)
     pl.addWidget(pt)
     pl.addWidget(pd)
     pl.addWidget(pb, 0, Qt.AlignmentFlag.AlignLeft)
@@ -1832,6 +1852,8 @@ def speak_text(self):
         if not text:
             self.statusBar().showMessage("Escribe un texto antes de reproducir.")
             return
+        if not self._trial_gate(text):
+            return
         try:
             self.engine.stop()
         except Exception:
@@ -1869,6 +1891,7 @@ def speak_text(self):
         self._last_synth_key = (
             self.voice_combo.currentText().strip(), text)
         self.engine.speak_async(text)
+        self._trial_spend(text)
         self.player_timer.start(100)
     except Exception as exc:
         QMessageBox.warning(self, "Error", f"No se pudo reproducir: {exc}")
@@ -1921,11 +1944,16 @@ def export_wav(self):
     if not text:
         self.statusBar().showMessage("Escribe un texto antes de exportar.")
         return
+    if not self._trial_gate(text):
+        return
+    if not self._trial_gate(text):
+        return
     path, _ = QFileDialog.getSaveFileName(self, "Guardar audio WAV",
                                           "willpovoice_audio.wav",
                                           "Archivos WAV (*.wav)")
     if not path:
         return
+    self._trial_spend(text)
     self._run_export(text, path, False)
 
 
@@ -1943,6 +1971,7 @@ def export_mp3(self):
     if not path.lower().endswith(".mp3"):
         path += ".mp3"
     self._mp3_final_path = path
+    self._trial_spend(text)
     self._run_export(text, tempfile.mktemp(suffix=".wav"), True)
 
 
@@ -2056,6 +2085,7 @@ def show_help(self):
 
 def _check_license(self):
     state, days_left = license_manager.check_status()
+    self._refresh_token_chip(state)
     if state == "licensed":
         self.license_label.setText("Version licenciada.")
         self.statusBar().showMessage("Version licenciada.")
@@ -2745,3 +2775,435 @@ MainWindow._on_slider_pressed = _on_slider_pressed
 MainWindow._on_slider_released = _on_slider_released
 
 MainWindow._repair_engine = _repair_engine
+
+
+def _trial_active(self):
+    try:
+        state, _ = license_manager.check_status()
+        return state == "trial"
+    except Exception:
+        return False
+
+
+def _trial_gate(self, text):
+    try:
+        if not self._trial_active():
+            return True
+        if trial_tokens.balance() < trial_tokens.cost_for(text):
+            self._show_no_tokens()
+            return False
+        return True
+    except Exception:
+        return True
+
+
+def _trial_spend(self, text):
+    try:
+        state, _ = license_manager.check_status()
+        if state != "trial":
+            return
+        ok, cost, bal = trial_tokens.spend(text)
+        if ok:
+            self._update_token_chip()
+            self.statusBar().showMessage(
+                f"Conversion: -{cost} tokens · saldo {bal:,}")
+    except Exception:
+        pass
+
+
+def _update_token_chip(self):
+    txt = getattr(self, "_token_chip_text", None)
+    if txt is None:
+        return
+    txt.setText(f"{trial_tokens.balance():,} tokens")
+
+
+def _refresh_token_chip(self, state):
+    icon = getattr(self, "_token_chip_icon", None)
+    txt = getattr(self, "_token_chip_text", None)
+    if icon is None or txt is None:
+        return
+    wrap = getattr(self, "_token_chip_wrap", None)
+    if state == "trial":
+        trial_tokens.ensure_init()
+        if wrap is not None:
+            wrap.setVisible(True)
+        icon.setVisible(True)
+        txt.setVisible(True)
+        txt.setText(f"{trial_tokens.balance():,} tokens")
+    else:
+        if wrap is not None:
+            wrap.setVisible(False)
+        icon.setVisible(False)
+        txt.setVisible(False)
+
+
+def _show_no_tokens(self):
+    from PySide6.QtWidgets import (QDialog, QVBoxLayout, QLabel,
+                                   QPushButton)
+    from PySide6.QtGui import QDesktopServices
+    from PySide6.QtCore import QUrl
+    d = QDialog(self)
+    d.setModal(True)
+    d.setFixedWidth(400)
+    d.setWindowTitle("Tokens de prueba")
+    d.setStyleSheet("QDialog { background: #0b0e14; }")
+    v = QVBoxLayout(d)
+    v.setContentsMargins(28, 24, 28, 22)
+    v.setSpacing(10)
+    ic = QLabel()
+    ic.setPixmap(make_icon("coins", "#f5b544", 46))
+    ic.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    v.addWidget(ic)
+    t1 = QLabel("¡Tokens de prueba agotados!")
+    t1.setStyleSheet(
+        "color: #e6edf3; font-size: 18px; font-weight: 800;")
+    t1.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    v.addWidget(t1)
+    t2 = QLabel("Usaste tus 10,000 tokens. Compra una licencia "
+                "para continuar sin limites.")
+    t2.setStyleSheet("color: #8b949e; font-size: 11.5px;")
+    t2.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    t2.setWordWrap(True)
+    v.addWidget(t2)
+    v.addSpacing(6)
+    b1 = QPushButton("Comprar por WhatsApp")
+    b1.setFixedHeight(40)
+    b1.setStyleSheet(
+        "QPushButton { background: transparent; color: #2ea043;"
+        " border: 1px solid #2ea043; border-radius: 10px;"
+        " font-weight: 600; }"
+        " QPushButton:hover { background: rgba(46,160,67,35); }")
+    b1.clicked.connect(lambda: QDesktopServices.openUrl(
+        QUrl("https://wa.me/51923073560")))
+    v.addWidget(b1)
+    b2 = QPushButton("Activar licencia")
+    b2.setFixedHeight(40)
+    b2.setStyleSheet(
+        "QPushButton { background: #7c5cff; color: white;"
+        " border: none; border-radius: 10px; font-weight: 700; }"
+        " QPushButton:hover { background: #8d75ff; }")
+    b2.clicked.connect(lambda: (d.accept(), self._check_license()))
+    v.addWidget(b2)
+    d.exec()
+
+
+MainWindow._trial_active = _trial_active
+MainWindow._trial_gate = _trial_gate
+MainWindow._trial_spend = _trial_spend
+MainWindow._update_token_chip = _update_token_chip
+MainWindow._refresh_token_chip = _refresh_token_chip
+MainWindow._show_no_tokens = _show_no_tokens
+
+
+# ==== Canales de venta (llenalos cuando los tengas) ====
+DISCORD_URL = ""
+YAPE_URL_MENSUAL = ""
+YAPE_URL_LIFETIME = ""
+
+
+class PaymentDialog(QDialog):
+    def __init__(self, parent, plan, price, yape_url):
+        super().__init__(parent)
+        self.setModal(True)
+        self.setFixedWidth(430)
+        self.setWindowTitle("Comprar " + plan)
+        self._plan = plan
+        self.setStyleSheet("PaymentDialog { background: #0b0e14; }")
+        v = QVBoxLayout(self)
+        v.setContentsMargins(28, 24, 28, 22)
+        v.setSpacing(12)
+        ic = QLabel()
+        ic.setPixmap(make_icon("smartphone", "#7c5cff", 42))
+        ic.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        v.addWidget(ic)
+        t1 = QLabel("Plan " + plan)
+        t1.setStyleSheet(
+            "color: #e6edf3; font-size: 18px; font-weight: 800;")
+        t1.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        v.addWidget(t1)
+        t2 = QLabel("S/ " + str(price) + " · pago seguro con Yape")
+        t2.setStyleSheet(
+            "color: #f5b544; font-size: 13px; font-weight: 700;")
+        t2.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        v.addWidget(t2)
+        tit = QLabel("Titular: Anton Val*")
+        tit.setStyleSheet("color: #c9d1d9; font-size: 11.5px;")
+        tit.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        v.addWidget(tit)
+        self._qr_wrap = QFrame()
+        self._qr_wrap.setObjectName("qrwrap")
+        self._qr_wrap.setStyleSheet(
+            "#qrwrap { background: #ffffff; border-radius: 14px; }")
+        qv = QVBoxLayout(self._qr_wrap)
+        qv.setContentsMargins(10, 10, 10, 10)
+        self._qr_label = QLabel()
+        self._qr_label.setFixedSize(170, 170)
+        qv.addWidget(self._qr_label)
+        v.addWidget(self._qr_wrap, 0, Qt.AlignmentFlag.AlignCenter)
+        self._load_qr()
+        info = QLabel("Escanea el QR con tu app Yape y paga de forma "
+                      "segura, sin necesidad de nuestro numero.")
+        info.setStyleSheet("color: #8b949e; font-size: 11px;")
+        info.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        info.setWordWrap(True)
+        v.addWidget(info)
+        v.addSpacing(4)
+        if yape_url:
+            by = QPushButton("Pagar con Yape ahora")
+            by.setFixedHeight(42)
+            by.setCursor(Qt.CursorShape.PointingHandCursor)
+            by.setStyleSheet(
+                "QPushButton { background: qlineargradient(x1:0,y1:0,"
+                "x2:1,y2:0, stop:0 #6d5df0, stop:0.5 #7c5cff,"
+                " stop:1 #6d5df0); color: white; border: none;"
+                " border-radius: 10px; font-weight: 700; }"
+                " QPushButton:hover { background: #8d75ff; }")
+            by.clicked.connect(
+                lambda: QDesktopServices.openUrl(QUrl(yape_url)))
+            v.addWidget(by)
+        bd = QPushButton("Enviar comprobante por Discord")
+        bd.setFixedHeight(42)
+        bd.setCursor(Qt.CursorShape.PointingHandCursor)
+        bd.setStyleSheet(
+            "QPushButton { background: #5865F2; color: white;"
+            " border: none; border-radius: 10px; font-weight: 700; }"
+            " QPushButton:hover { background: #6a76ff; }")
+        bd.clicked.connect(self._open_discord)
+        v.addWidget(bd)
+        bw = QPushButton("Enviar comprobante por WhatsApp")
+        bw.setFixedHeight(42)
+        bw.setCursor(Qt.CursorShape.PointingHandCursor)
+        bw.setStyleSheet(
+            "QPushButton { background: #2ea043; color: white;"
+            " border: none; border-radius: 10px; font-weight: 700; }"
+            " QPushButton:hover { background: #3fb950; }")
+        bw.clicked.connect(self._open_whatsapp)
+        v.addWidget(bw)
+        self._hint = QLabel("")
+        self._hint.setStyleSheet("color: #ef4444; font-size: 10.5px;")
+        self._hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._hint.setWordWrap(True)
+        v.addWidget(self._hint)
+        st = QLabel("1) Escanea el QR con Yape  ·  2) Envia tu "
+                    "comprobante por Discord  ·  3) Recibe tu clave al instante")
+        st.setStyleSheet("color: #8b949e; font-size: 10px;")
+        st.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        st.setWordWrap(True)
+        v.addWidget(st)
+
+    def _load_qr(self):
+        import sys
+        base = Path(getattr(sys, "_MEIPASS",
+                            Path(__file__).resolve().parents[1]))
+        plan = getattr(self, "_plan", "").lower()
+        dirs = [base / "assets" / "icons", base / "assets",
+                Path("assets") / "icons", Path("assets")]
+        cands = []
+        for d in dirs:
+            try:
+                for f in d.iterdir():
+                    low = f.name.lower()
+                    if f.is_file() and low.endswith(
+                            (".png", ".jpg", ".jpeg", ".webp")) and (
+                            "qr" in low or "yape" in low):
+                        cands.append(f)
+            except Exception:
+                pass
+
+        def score(f):
+            low = f.name.lower()
+            if low.startswith("yape_qr_" + plan):
+                return 0
+            if low.startswith("yape_qr"):
+                return 1
+            if "yape" in low and "qr" in low:
+                return 2
+            return 3
+
+        cands.sort(key=score)
+        print("QR candidatos:", [c.name for c in cands])
+        for fp in cands:
+            px = QPixmap(str(fp)).scaled(
+                170, 170, Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation)
+            if not px.isNull():
+                self._qr_label.setPixmap(px)
+                self._qr_label.setAlignment(
+                    Qt.AlignmentFlag.AlignCenter)
+                return
+        self._qr_wrap.setVisible(False)
+
+
+    def _open_whatsapp(self):
+        import urllib.parse
+        plan = getattr(self, "_plan", "")
+        msg = ("Hola WillpoVoice, acabo de pagar el plan " + plan +
+               " con Yape. Adjunto mi comprobante.")
+        url = ("https://wa.me/51923073560?text=" +
+               urllib.parse.quote(msg))
+        QDesktopServices.openUrl(QUrl(url))
+
+    def _open_discord(self):
+        if DISCORD_URL:
+            QDesktopServices.openUrl(QUrl(DISCORD_URL))
+        else:
+            self._hint.setText(
+                "Discord aun no configurado en esta version. "
+                "Usa el boton Soporte de la ventana principal.")
+
+
+class PlansDialog(QDialog):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setModal(True)
+        self.setFixedWidth(470)
+        self.setWindowTitle("WillpoVoice Premium")
+        self.setStyleSheet("PlansDialog { background: #0b0e14; }")
+        self._bg = QLabel(self)
+        self._bg.setStyleSheet("background: transparent;")
+        self._bg.lower()
+        v = QVBoxLayout(self)
+        v.setContentsMargins(26, 22, 26, 20)
+        v.setSpacing(12)
+        hd = QLabel()
+        hd.setPixmap(make_icon("crown", "#f5b544", 34))
+        hd.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        v.addWidget(hd)
+        t1 = QLabel("Elige tu plan")
+        t1.setStyleSheet(
+            "color: #e6edf3; font-size: 20px; font-weight: 800;")
+        t1.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        v.addWidget(t1)
+        t2 = QLabel("Voces premium reales, sin limites artificiales.")
+        t2.setStyleSheet("color: #8b949e; font-size: 11.5px;")
+        t2.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        v.addWidget(t2)
+        self._card(v, "flask", "#8b949e", "Gratis", "S/ 0",
+                   ["7 dias de prueba", "10,000 tokens incluidos",
+                    "Todas las voces premium"],
+                   btn=("Iniciar prueba gratuita", False),
+                   on_buy=self._start_trial)
+        self._card(v, "coins", "#58a6ff", "Mensual", "S/ 10",
+                   ["20,000 tokens al mes", "Todas las voces premium",
+                    "Soporte por Discord"],
+                   btn=("Comprar", False),
+                   on_buy=lambda: self._buy(
+                       "Mensual", 10, YAPE_URL_MENSUAL))
+        self._card(v, "sparkles", "#f5b544", "Lifetime", "S/ 30",
+                   ["Uso ILIMITADO, sin tokens", "Voces nuevas para siempre",
+                    "Soporte prioritario de por vida"],
+                   btn=("Comprar", True), badge="Recomendado",
+                   on_buy=lambda: self._buy(
+                       "Lifetime", 30, YAPE_URL_LIFETIME))
+
+    def _build_bg(self):
+        import sys
+        base = Path(getattr(sys, "_MEIPASS",
+                            Path(__file__).resolve().parents[1]))
+        src = base / "assets" / "icons" / "licencia_left.png"
+        if not src.exists():
+            return
+        w = self.width()
+        h = self.height()
+        if w <= 0 or h <= 0:
+            return
+        out = QPixmap(w, h)
+        out.fill(QColor("#0b0e14"))
+        p = QPainter(out)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        scaled = QPixmap(str(src)).scaled(
+            w, h, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            Qt.TransformationMode.SmoothTransformation)
+        p.drawPixmap((w - scaled.width()) // 2,
+                     (h - scaled.height()) // 2, scaled)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(11, 14, 19, 205))
+        p.drawRect(0, 0, w, h)
+        p.end()
+        self._bg.setPixmap(out)
+        self._bg.setGeometry(0, 0, w, h)
+        self._bg.lower()
+
+    def resizeEvent(self, ev):
+        super().resizeEvent(ev)
+        self._build_bg()
+
+    def _start_trial(self):
+        try:
+            state, days = license_manager.check_status()
+        except Exception:
+            state, days = "trial", 7
+        d = TrialActivatedDialog(
+            self, max(0, days if state == "trial" else 7))
+        d.exec()
+
+    def _card(self, v, icon, color, name, price, feats, btn=None,
+              badge=None, on_buy=None):
+        card = QFrame()
+        card.setObjectName("plancard_" + name)
+        border = "#7c5cff" if badge else "#30363d"
+        card.setStyleSheet(
+            "#plancard_" + name + " { background: #161b22; border: 1px solid "
+            + border + "; border-radius: 12px; }")
+        cv = QVBoxLayout(card)
+        cv.setContentsMargins(14, 12, 14, 12)
+        cv.setSpacing(8)
+        top = QHBoxLayout()
+        icl = QLabel()
+        icl.setPixmap(make_icon(icon, color, 18))
+        top.addWidget(icl)
+        nm = QLabel(name + ("  ★ " + badge if badge else ""))
+        nm.setStyleSheet(
+            "color: #e6edf3; font-size: 13px; font-weight: 800;")
+        top.addWidget(nm)
+        top.addStretch(1)
+        pr = QLabel(price)
+        pr.setStyleSheet(
+            "color: " + color + "; font-size: 13px; font-weight: 800;")
+        top.addWidget(pr)
+        cv.addLayout(top)
+        for f in feats:
+            fr = QHBoxLayout()
+            fr.setSpacing(8)
+            ck = QLabel()
+            ck.setPixmap(make_icon("check", "#2ea043", 12))
+            fr.addWidget(ck)
+            fl = QLabel(f)
+            fl.setStyleSheet("color: #c9d1d9; font-size: 11px;")
+            fr.addWidget(fl)
+            fr.addStretch(1)
+            cv.addLayout(fr)
+        if btn:
+            b = QPushButton(btn[0])
+            b.setFixedHeight(36)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            if btn[1]:
+                b.setStyleSheet(
+                    "QPushButton { background: qlineargradient(x1:0,y1:0,"
+                    "x2:1,y2:0, stop:0 #6d5df0, stop:0.5 #7c5cff,"
+                    " stop:1 #6d5df0); color: white; border: none;"
+                    " border-radius: 9px; font-weight: 700; }"
+                    " QPushButton:hover { background: #8d75ff; }")
+            else:
+                b.setStyleSheet(
+                    "QPushButton { background: transparent;"
+                    " color: #58a6ff; border: 1px solid #58a6ff;"
+                    " border-radius: 9px; font-weight: 600; }"
+                    " QPushButton:hover { background: rgba(88,166,255,35); }")
+            if on_buy:
+                b.clicked.connect(on_buy)
+            cv.addWidget(b)
+        v.addWidget(card)
+
+    def _buy(self, plan, price, yape_url):
+        d = PaymentDialog(self, plan, price, yape_url)
+        d.exec()
+
+
+def _open_plans(self):
+    dlg = PlansDialog(self)
+    dlg.exec()
+
+
+MainWindow._open_plans = _open_plans

@@ -493,8 +493,32 @@ class BannerDelegate(QStyledItemDelegate):
 
 
 
-from core import file_reader
+from core import file_reader, trial_tokens
 from core import license_manager
+
+
+def _lic_svg(kind, color, s=18):
+    from PySide6.QtSvg import QSvgRenderer
+    from PySide6.QtCore import QByteArray
+    import sys
+    base = Path(getattr(sys, "_MEIPASS",
+                        Path(__file__).resolve().parents[1]))
+    fp = base / "assets" / "icons" / "svg" / (kind + ".svg")
+    pix = QPixmap(s, s)
+    pix.fill(Qt.GlobalColor.transparent)
+    if fp.exists():
+        try:
+            txt = fp.read_text(encoding="utf-8").replace(
+                "currentColor", color)
+            r = QSvgRenderer(QByteArray(txt.encode("utf-8")))
+            if r.isValid():
+                q = QPainter(pix)
+                r.render(q)
+                q.end()
+                return pix
+        except Exception:
+            pass
+    return _lic_pix(kind, color, s)
 
 
 def _lic_pix(kind, color, s=18):
@@ -590,11 +614,206 @@ def _lic_pix(kind, color, s=18):
     return pix
 
 
+# -- constantes fallback licencia --
+for _c, _v in (("BG", "#0b0e14"), ("TEXT", "#e6edf3"), ("MUTED", "#8b949e"), ("CARD", "#161b22"), ("BORDER", "#30363d"), ("GOLD", "#f5b544"), ("PURPLE", "#7c5cff"), ("BLUE", "#58a6ff"), ("GREEN", "#2ea043"), ("RED", "#ef4444")):
+    if _c not in globals():
+        globals()[_c] = _v
+
+
+def _rounded_pixmap(path, size, radius):
+    from PySide6.QtGui import QPainterPath
+    src = QPixmap(str(path))
+    out = QPixmap(size, size)
+    out.fill(Qt.GlobalColor.transparent)
+    p = QPainter(out)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pp = QPainterPath()
+    pp.addRoundedRect(0, 0, size, size, radius, radius)
+    p.setClipPath(pp)
+    p.drawPixmap(0, 0, src.scaled(
+        size, size,
+        Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+        Qt.TransformationMode.SmoothTransformation))
+    p.end()
+    return out
+
+
+class _StopwatchWidget(QWidget):
+    """Cronometro animado con microfono difuminado dentro del dial."""
+
+    def __init__(self, size=190):
+        super().__init__()
+        self.setFixedSize(size, size)
+        self._angle = 0.0
+        self._pulse = 0.0
+        self._face = self._make_face(int(size * 0.62))
+        from PySide6.QtCore import QTimer
+        self._t = QTimer(self)
+        self._t.timeout.connect(self._tick)
+        self._t.start(40)
+
+    def _make_face(self, size):
+        from PySide6.QtGui import QPainterPath
+        lp = MainWindow._resource_path(
+            Path("assets") / "icons" / "licencia_left.png")
+        if not lp.exists():
+            lp = MainWindow._resource_path(
+                Path("assets") / "icons" / "portada.png")
+        out = QPixmap(size, size)
+        out.fill(Qt.GlobalColor.transparent)
+        if not lp.exists():
+            return out
+        src = QPixmap(str(lp))
+        side = min(src.width(), src.height())
+        src = src.copy((src.width() - side) // 2,
+                       (src.height() - side) // 2, side, side)
+        small = src.scaledToWidth(
+            28, Qt.TransformationMode.SmoothTransformation)
+        blurred = small.scaled(
+            side, side, Qt.AspectRatioMode.IgnoreAspectRatio,
+            Qt.TransformationMode.SmoothTransformation)
+        p = QPainter(out)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addEllipse(0, 0, size, size)
+        p.setClipPath(path)
+        p.drawPixmap(0, 0, blurred.scaled(
+            size, size, Qt.AspectRatioMode.IgnoreAspectRatio,
+            Qt.TransformationMode.SmoothTransformation))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(13, 17, 26, 165))
+        p.drawEllipse(0, 0, size, size)
+        p.end()
+        return out
+
+    def _tick(self):
+        self._angle = (self._angle + 4) % 360
+        self._pulse += 0.08
+        self.update()
+
+    def paintEvent(self, ev):
+        import math
+        from PySide6.QtGui import QPen
+        from PySide6.QtCore import QPointF
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w = self.width()
+        s = w / 150.0
+        cx = w / 2.0
+        cy = w / 2.0
+        glow = 0.6 + 0.4 * math.sin(self._pulse)
+        p.setPen(Qt.PenStyle.NoPen)
+        for r, a in ((72, 26 * glow), (60, 40 * glow)):
+            p.setBrush(QColor(124, 92, 255, int(a)))
+            p.drawEllipse(QPointF(cx, cy), r * s, r * s)
+        d = 88 * s
+        if not self._face.isNull():
+            p.drawPixmap(QPointF(cx - d / 2, cy - d / 2),
+                         self._face.scaled(
+                             int(d), int(d),
+                             Qt.AspectRatioMode.IgnoreAspectRatio,
+                             Qt.TransformationMode.SmoothTransformation))
+        p.setPen(QPen(QColor("#f5b544"), 4 * s))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawEllipse(QPointF(cx, cy), 45 * s, 45 * s)
+        p.setPen(QPen(QColor("#f5b544"), 4 * s))
+        p.drawLine(QPointF(cx, cy - 45 * s), QPointF(cx, cy - 56 * s))
+        p.drawLine(QPointF(cx - 8 * s, cy - 58 * s),
+                   QPointF(cx + 8 * s, cy - 58 * s))
+        p.setPen(QPen(QColor("#c9d1d9"), 2 * s))
+        for i in range(12):
+            a = math.radians(i * 30)
+            p.drawLine(
+                QPointF(cx + 37 * s * math.sin(a),
+                        cy - 37 * s * math.cos(a)),
+                QPointF(cx + 42 * s * math.sin(a),
+                        cy - 42 * s * math.cos(a)))
+        a = math.radians(self._angle)
+        p.setPen(QPen(QColor("#7c5cff"), 3.5 * s))
+        p.drawLine(QPointF(cx, cy),
+                   QPointF(cx + 33 * s * math.sin(a),
+                           cy - 33 * s * math.cos(a)))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor("#7c5cff"))
+        p.drawEllipse(QPointF(cx, cy), 4 * s, 4 * s)
+        p.end()
+
+
+class TrialActivatedDialog(QDialog):
+    """Ventana de prueba gratuita activada (misma estetica)."""
+
+    def __init__(self, parent, days_left):
+        super().__init__(parent)
+        self.setModal(True)
+        self.setFixedWidth(480)
+        self.setWindowTitle("Prueba gratuita")
+        self.setStyleSheet(
+            f"TrialActivatedDialog {{ background: {BG}; }}")
+        root = QVBoxLayout(self)
+        root.setContentsMargins(30, 26, 30, 24)
+        root.setSpacing(12)
+        root.addWidget(_StopwatchWidget(190), 0,
+                       Qt.AlignmentFlag.AlignCenter)
+        tt = QLabel("¡Prueba gratuita activada!")
+        tt.setStyleSheet(
+            f"color: {TEXT}; font-size: 20px; font-weight: 800;")
+        tt.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        root.addWidget(tt)
+        st = QLabel("Disfruta de todas las voces premium sin limites.")
+        st.setStyleSheet(f"color: {MUTED}; font-size: 12px;")
+        st.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        root.addWidget(st)
+        card = QFrame()
+        card.setObjectName("tcard")
+        card.setFixedHeight(46)
+        card.setStyleSheet(
+            f"#tcard {{ background: {CARD}; border: 1px solid {BORDER};"
+            " border-radius: 10px; }")
+        cl = QHBoxLayout(card)
+        cl.setContentsMargins(14, 0, 14, 0)
+        cl.setSpacing(10)
+        cr = QLabel()
+        cr.setPixmap(_lic_svg("crown", GOLD, 16))
+        cl.addWidget(cr)
+        from datetime import datetime, timedelta
+        fin = datetime.now() + timedelta(days=max(0, days_left))
+        lb = QLabel(
+            f'<span style="color:{GOLD}; font-weight:700;">'
+            f'{days_left} dias</span>  ·  hasta el '
+            f'{fin.strftime("%d/%m/%Y")}')
+        lb.setStyleSheet(f"color: {TEXT}; font-size: 12px;")
+        cl.addWidget(lb)
+        coin = QLabel()
+        coin.setPixmap(_lic_svg("coins", GOLD, 14))
+        cl.addWidget(coin)
+        tk = QLabel(
+            f'<span style="color:{GOLD}; font-weight:700;">'
+            f'{trial_tokens.TRIAL_TOKENS:,} tokens</span>')
+        tk.setStyleSheet(f"color: {TEXT}; font-size: 12px;")
+        cl.addWidget(tk)
+        cl.addStretch()
+        root.addWidget(card)
+        btn = QPushButton("Comenzar a usar WillpoVoice")
+        btn.setFixedHeight(44)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setIcon(QIcon(_lic_svg("bolt", "#ffffff", 16)))
+        btn.setIconSize(QSize(16, 16))
+        btn.setStyleSheet(
+            "QPushButton { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+            " stop:0 #6d5df0, stop:0.5 #7c5cff, stop:1 #6d5df0);"
+            " color: white; border: none; border-radius: 10px;"
+            " font-size: 13px; font-weight: 700; }"
+            " QPushButton:hover { background: #8d75ff; }")
+        btn.clicked.connect(self.accept)
+        root.addWidget(btn)
+
+
 class LicenseDialog(QDialog):
     def __init__(self, parent, machine_id: str, days_left: int):
         super().__init__(parent)
         self.activated_key = ""
         self.trial_accepted = False
+        self.days_left = days_left
         self.machine_id = machine_id
 
         BG = "#0b0f17"
@@ -647,7 +866,7 @@ class LicenseDialog(QDialog):
         bl.addStretch()
         close_btn = QPushButton()
         close_btn.setFixedSize(34, 34)
-        close_btn.setIcon(QIcon(_lic_pix("x", TEXT, 14)))
+        close_btn.setIcon(QIcon(_lic_svg("x", TEXT, 14)))
         close_btn.setIconSize(QSize(14, 14))
         close_btn.setStyleSheet(
             "QPushButton { background: transparent; border: none;"
@@ -710,7 +929,7 @@ class LicenseDialog(QDialog):
             row.setContentsMargins(0, 0, 0, 0)
             ic = QLabel()
             ic.setFixedSize(18, 18)
-            ic.setPixmap(_lic_pix(kind, "#d7dde7", 16))
+            ic.setPixmap(_lic_svg(kind, "#d7dde7", 16))
             ic.setAlignment(Qt.AlignmentFlag.AlignCenter)
             row.addWidget(ic)
             lb = QLabel(txt)
@@ -777,7 +996,7 @@ class LicenseDialog(QDialog):
         il.setContentsMargins(14, 0, 8, 0)
         il.setSpacing(10)
         mic = QLabel()
-        mic.setPixmap(_lic_pix("monitor", PURPLE, 16))
+        mic.setPixmap(_lic_svg("monitor", PURPLE, 16))
         il.addWidget(mic)
         idl = QLabel("ID de esta maquina:")
         idl.setStyleSheet(f"color: {TEXT}; font-size: 12px;")
@@ -788,7 +1007,7 @@ class LicenseDialog(QDialog):
         il.addWidget(idv)
         copy_btn = QPushButton()
         copy_btn.setFixedSize(30, 30)
-        copy_btn.setIcon(QIcon(_lic_pix("copy", MUTED, 14)))
+        copy_btn.setIcon(QIcon(_lic_svg("copy", MUTED, 14)))
         copy_btn.setIconSize(QSize(14, 14))
         copy_btn.setStyleSheet(
             "QPushButton { background: transparent; border: none;"
@@ -802,6 +1021,9 @@ class LicenseDialog(QDialog):
 
         trial_card = QFrame()
         trial_card.setObjectName("trialcard")
+        self._trial_card = trial_card
+        trial_card.setCursor(Qt.CursorShape.PointingHandCursor)
+        trial_card.installEventFilter(self)
         trial_card.setFixedHeight(46)
         trial_card.setStyleSheet(
             f"#trialcard {{ background: {CARD}; border: 1px solid {BORDER};"
@@ -810,7 +1032,7 @@ class LicenseDialog(QDialog):
         tl.setContentsMargins(14, 0, 14, 0)
         tl.addStretch()
         cr = QLabel()
-        cr.setPixmap(_lic_pix("crown", GOLD, 16))
+        cr.setPixmap(_lic_svg("crown", GOLD, 16))
         tl.addWidget(cr)
         if days_left >= 0:
             tr_txt = (
@@ -842,7 +1064,7 @@ class LicenseDialog(QDialog):
         kf.setContentsMargins(14, 0, 14, 0)
         kf.setSpacing(10)
         kicon = QLabel()
-        kicon.setPixmap(_lic_pix("key", PURPLE, 16))
+        kicon.setPixmap(_lic_svg("key", PURPLE, 16))
         kf.addWidget(kicon)
         self.key_edit = QLineEdit()
         self.key_edit.setPlaceholderText(
@@ -853,7 +1075,7 @@ class LicenseDialog(QDialog):
         hint_row = QHBoxLayout()
         hint_row.setSpacing(8)
         hi = QLabel()
-        hi.setPixmap(_lic_pix("info", MUTED, 14))
+        hi.setPixmap(_lic_svg("info", MUTED, 14))
         hint_row.addWidget(hi)
         self.hint_label = QLabel(
             "Puedes encontrar tu clave en el correo de compra.")
@@ -866,7 +1088,7 @@ class LicenseDialog(QDialog):
         activate = QPushButton("Activar Licencia")
         activate.setFixedHeight(44)
         activate.setCursor(Qt.CursorShape.PointingHandCursor)
-        activate.setIcon(QIcon(_lic_pix("shield", "#ffffff", 18)))
+        activate.setIcon(QIcon(_lic_svg("shield", "#ffffff", 18)))
         activate.setIconSize(QSize(18, 18))
         activate.setStyleSheet(
             "QPushButton { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
@@ -883,7 +1105,7 @@ class LicenseDialog(QDialog):
         buy = QPushButton("Comprar por WhatsApp")
         buy.setFixedHeight(42)
         buy.setCursor(Qt.CursorShape.PointingHandCursor)
-        buy.setIcon(QIcon(_lic_pix("wa", GREEN, 16)))
+        buy.setIcon(QIcon(_lic_svg("wa", GREEN, 16)))
         buy.setIconSize(QSize(16, 16))
         buy.setStyleSheet(
             f"QPushButton {{ background: transparent; color: {GREEN};"
@@ -897,7 +1119,7 @@ class LicenseDialog(QDialog):
             trial_btn = QPushButton("Continuar en prueba")
             trial_btn.setFixedHeight(42)
             trial_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            trial_btn.setIcon(QIcon(_lic_pix("flask", "#c9d1d9", 16)))
+            trial_btn.setIcon(QIcon(_lic_svg("flask", "#c9d1d9", 16)))
             trial_btn.setIconSize(QSize(16, 16))
             trial_btn.setStyleSheet(
                 f"QPushButton {{ background: transparent; color: #c9d1d9;"
@@ -917,7 +1139,7 @@ class LicenseDialog(QDialog):
         footer = QHBoxLayout()
         footer.setSpacing(8)
         lo = QLabel()
-        lo.setPixmap(_lic_pix("lock", MUTED, 13))
+        lo.setPixmap(_lic_svg("lock", MUTED, 13))
         footer.addWidget(lo)
         fl = QLabel("Tu informacion esta 100% segura y encriptada.")
         fl.setStyleSheet(f"color: {MUTED}; font-size: 10.5px;")
@@ -925,7 +1147,7 @@ class LicenseDialog(QDialog):
         footer.addStretch()
         help_btn = QPushButton("Necesitas ayuda?")
         help_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        help_btn.setIcon(QIcon(_lic_pix("help", BLUE, 14)))
+        help_btn.setIcon(QIcon(_lic_svg("help", BLUE, 14)))
         help_btn.setIconSize(QSize(14, 14))
         help_btn.setStyleSheet(
             f"QPushButton {{ background: transparent; color: {BLUE};"
@@ -970,6 +1192,26 @@ class LicenseDialog(QDialog):
             f"Mi ID de maquina: {self.machine_id}"
         )
         QDesktopServices.openUrl(QUrl(f"https://wa.me/51923073560?text={msg}"))
+
+    def eventFilter(self, obj, event):
+        from PySide6.QtCore import QEvent
+        if (obj is getattr(self, "_trial_card", None) and
+                event.type() == QEvent.Type.MouseButtonRelease):
+            self._on_trial_card_clicked()
+            return True
+        return super().eventFilter(obj, event)
+
+    def _on_trial_card_clicked(self):
+        if getattr(self, "_trial_open", False):
+            return
+        if getattr(self, "days_left", -1) < 0:
+            return
+        self._trial_open = True
+        dlg = TrialActivatedDialog(self, max(0, self.days_left))
+        dlg.exec()
+        self._trial_open = False
+        self.trial_accepted = True
+        self.accept()
 
     def accept_trial(self) -> None:
         self.trial_accepted = True
@@ -1277,7 +1519,7 @@ class MainWindow(QMainWindow):
         self.logger = logging.getLogger("naturalvoice_tts.ui")
         self.settings = load_settings()
 
-        self.setWindowTitle("WillpoVoice v1.2.7")
+        self.setWindowTitle("WillpoVoice v1.2.8")
         self.resize(950, 650)
 
         icon_path = self._resource_path(Path("assets") / "icons" / "icon.ico")
