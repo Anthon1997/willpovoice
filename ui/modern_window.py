@@ -632,7 +632,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.logger = logging.getLogger("naturalvoice_tts.ui")
         self.settings = load_settings()
-        self.setWindowTitle("WillpoVoice v1.2.5")
+        self.setWindowTitle("WillpoVoice v1.2.6")
         self.resize(1280, 800)
         self.setMinimumSize(980, 640)
         icon_path = self._resource_path(Path("assets") / "icons" / "icon.ico")
@@ -810,7 +810,7 @@ def _build_ui(self):
     self._logo_name.setStyleSheet(
         f"color: {TEXT}; font-size: 15px; font-weight: 700; background: transparent;"
     )
-    self._logo_ver = QLabel("v1.2.5")
+    self._logo_ver = QLabel("v1.2.6")
     self._logo_ver.setAlignment(Qt.AlignmentFlag.AlignCenter)
     self._logo_ver.setStyleSheet(
         f"color: {MUTED}; font-size: 10px; background: transparent;"

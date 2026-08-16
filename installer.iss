@@ -1,11 +1,11 @@
 [Setup]
 AppName=WillpoVoice
-AppVersion=1.2.5
+AppVersion=1.2.6
 AppPublisher=WillpoTech
 DefaultDirName={autopf}\WillpoVoice
 DefaultGroupName=WillpoVoice
 OutputDir=dist
-OutputBaseFilename=WillpoVoice-Setup-1.2.5
+OutputBaseFilename=WillpoVoice-Setup-1.2.6
 SetupIconFile=assets\icons\icon.ico
 UninstallDisplayIcon={app}\WillpoVoice.exe
 Compression=lzma2/ultra64
@@ -30,7 +30,7 @@ Name: "{autodesktop}\WillpoVoice"; Filename: "{app}\WillpoVoice.exe"
 Filename: "{app}\engine\Installer.exe"; Parameters: "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART"; Flags: runhidden waituntilterminated skipifsilent
 ; Aplica configuracion de voces (todas las multilingues habilitadas)
 Filename: "regedit.exe"; Parameters: "/s ""{app}\engine\adapter_config.reg"""; Flags: runhidden waituntilterminated skipifsilent
-Filename: "{app}\WillpoVoice.exe"; Description: "Abrir WillpoVoice"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\WillpoVoice.exe"; Description: "Abrir WillpoVoice"; Flags: nowait postinstall
 
 
 
