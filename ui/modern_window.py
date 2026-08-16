@@ -632,7 +632,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.logger = logging.getLogger("naturalvoice_tts.ui")
         self.settings = load_settings()
-        self.setWindowTitle("WillpoVoice v1.2.4")
+        self.setWindowTitle("WillpoVoice v1.2.5")
         self.resize(1280, 800)
         self.setMinimumSize(980, 640)
         icon_path = self._resource_path(Path("assets") / "icons" / "icon.ico")
@@ -810,7 +810,7 @@ def _build_ui(self):
     self._logo_name.setStyleSheet(
         f"color: {TEXT}; font-size: 15px; font-weight: 700; background: transparent;"
     )
-    self._logo_ver = QLabel("v1.2.4")
+    self._logo_ver = QLabel("v1.2.5")
     self._logo_ver.setAlignment(Qt.AlignmentFlag.AlignCenter)
     self._logo_ver.setStyleSheet(
         f"color: {MUTED}; font-size: 10px; background: transparent;"
@@ -979,10 +979,14 @@ def _build_ui(self):
         f"color: {MUTED}; font-size: 11px; background: transparent;"
     )
     self.lang_combo = QComboBox()
-    self.lang_combo.addItems(["Español (España)", "Inglés (EEUU)", "Todos"])
-    self.lang_combo.setItemIcon(0, QIcon(self._flag_pixmap("es")))
-    self.lang_combo.setItemIcon(1, QIcon(self._flag_pixmap("us")))
-    self.lang_combo.setItemIcon(2, QIcon(self._flag_pixmap("world")))
+    self.lang_combo.addItems(["Multilingüe Premium", "Español (España)", "Inglés (EEUU)", "Todos"])
+    self.lang_combo.setItemIcon(0, QIcon(make_icon("crown", "#f5b544", 16)))
+    self.lang_combo.setItemIcon(1, QIcon(self._flag_pixmap("es")))
+    self.lang_combo.setItemIcon(2, QIcon(self._flag_pixmap("us")))
+    self.lang_combo.setItemIcon(3, QIcon(self._flag_pixmap("world")))
+    self.lang_combo.currentIndexChanged.connect(
+        lambda _i: self._on_lang_changed())
+    self.lang_combo.setCurrentIndex(0)
     self.lang_combo.setStyleSheet(combo_qss)
     self.lang_combo.setFixedHeight(38)
     self.lang_combo.setSizePolicy(
@@ -1282,7 +1286,8 @@ def _build_ui(self):
     # self.player.positionChanged.connect(self._on_position_changed)
     # self.player.durationChanged.connect(self._on_duration_changed)
     # self.player.mediaStatusChanged.connect(self._on_media_status_changed)
-    # self.progress_slider.sliderMoved.connect(self._on_slider_moved)
+    self.progress_slider.sliderPressed.connect(self._on_slider_pressed)
+    self.progress_slider.sliderReleased.connect(self._on_slider_released)
     self.vol_slider.valueChanged.connect(self._on_volume_changed)
     self._seconds = 0
     self._switch_page(0)
@@ -1431,6 +1436,56 @@ def _make_card(self, name, layout):
     layout.addWidget(card)
 
 
+def _voice_lang(self, name):
+    low = name.lower()
+    if "multilingual" in low:
+        return "multi"
+    if "spanish" in low or "espa" in low or "es-" in low or "(es)" in low:
+        return "es"
+    if "english" in low or "ingl" in low or "en-" in low or "(en)" in low:
+        return "en"
+    return "otro"
+
+
+def _lang_filtered(self, names):
+    lang = self.lang_combo.currentText()
+    out = []
+    for name in names:
+        vl = self._voice_lang(name)
+        if lang.startswith("Espa") and vl != "es":
+            continue
+        if lang.startswith("Ingl") and vl != "en":
+            continue
+        if lang.startswith("Multiling") and not self._is_premium(name):
+            continue
+        out.append(name)
+    return out
+
+
+def _refill_combo(self):
+    cur = self.voice_combo.currentData(Qt.ItemDataRole.UserRole)
+    names = self._lang_filtered(getattr(self, "_voices", []))
+    self.voice_combo.blockSignals(True)
+    self.voice_combo.clear()
+    for v in names:
+        self.voice_combo.addItem(self._display_voice_name(v))
+        idx = self.voice_combo.count() - 1
+        self.voice_combo.setItemData(idx, v, Qt.ItemDataRole.UserRole)
+    self.voice_combo.blockSignals(False)
+    if cur in names:
+        self.voice_combo.setCurrentIndex(names.index(cur))
+    elif names:
+        self.voice_combo.setCurrentIndex(0)
+    self._icon_queue = list(range(self.voice_combo.count()))
+    if hasattr(self, "_icon_timer"):
+        self._icon_timer.start(60)
+
+
+def _on_lang_changed(self):
+    self._refill_combo()
+    self._rebuild_cards()
+
+
 def _rebuild_cards(self):
     self._clear_layout(self.voice_cards_layout)
     q = self.search_edit.text().strip().lower()
@@ -1442,6 +1497,14 @@ def _rebuild_cards(self):
         if getattr(self, "_rtab", "todas") == "favoritas" and name not in self._favorites():
             continue
         if q and q not in name.lower():
+            continue
+        vl = self._voice_lang(name)
+        lang = self.lang_combo.currentText()
+        if lang.startswith("Espa") and vl != "es":
+            continue
+        if lang.startswith("Ingl") and vl != "en":
+            continue
+        if lang.startswith("Multiling") and not premium:
             continue
         self._rec_names.append(name)
     self._rec_shown = 0
@@ -1534,20 +1597,15 @@ def _load_voices(self):
             dedup.append(v)
         voices = dedup
         self._voices = voices
-        self.voice_combo.blockSignals(True)
-        self.voice_combo.clear()
-        for v in voices:
-            self.voice_combo.addItem(self._display_voice_name(v))
-            idx = self.voice_combo.count() - 1
-            self.voice_combo.setItemData(idx, v, Qt.ItemDataRole.UserRole)
+        self._refill_combo()
+        names = self._lang_filtered(voices)
         last = self.settings.get("last_voice", "")
-        if last in voices:
+        if last in names:
             self._select_voice(last)
-        elif voices:
-            pref = next((v for v in voices if "SeraphinaMultilingual" in v),
-                        voices[0])
+        elif names:
+            pref = next((v for v in names if "SeraphinaMultilingual" in v),
+                        names[0])
             self._select_voice(pref)
-        self.voice_combo.blockSignals(False)
         self.stat_voices.value_label.setText(f"{len(voices)}+")
         self._all_built = False
         self._fav_built = False
@@ -1674,6 +1732,8 @@ def _tick_player(self):
         return
     if getattr(self, "_paused", False):
         return
+    if getattr(self, "_seeking", False):
+        return
     try:
         st = self.engine.adapter.sapi.Status
         state = int(st.RunningState)
@@ -1718,6 +1778,8 @@ def _tick_player(self):
 
 def _on_position_changed(self, pos):
     if not getattr(self, "_media_ready", False):
+        return
+    if getattr(self, "_seeking", False):
         return
     secs = pos / 1000.0
     self._seconds = secs
@@ -2014,6 +2076,10 @@ def showEvent(self, event):
 
 
 def closeEvent(self, event):
+    w = getattr(self, "_preview_worker", None)
+    if w is not None:
+        w.shutdown()
+        w.wait(2000)
     try:
         self.settings["last_voice"] = self._current_voice()
         save_settings(self.settings)
@@ -2085,52 +2151,95 @@ MainWindow.eventFilter = eventFilter
 
 
 class PreviewWorker(QThread):
-    """Previsualizacion de voz en hilo de fondo (no congela UI)."""
+    """Hilo UNICO y persistente: reutiliza una instancia SAPI."""
+    preview_done = Signal(str)
 
-    def __init__(self, description):
+    def __init__(self):
         super().__init__()
-        self._desc = description
-        self._stop = False
+        import queue
+        self._q = queue.Queue()
+        self._stopflag = False
+
+    def request(self, desc):
+        self._stopflag = True
+        while not self._q.empty():
+            try:
+                self._q.get_nowait()
+            except Exception:
+                break
+        self._stopflag = False
+        self._q.put(desc)
 
     def request_stop(self):
-        self._stop = True
+        self._stopflag = True
+        while not self._q.empty():
+            try:
+                self._q.get_nowait()
+            except Exception:
+                break
+
+    def shutdown(self):
+        self.request_stop()
+        self._q.put(None)
 
     def run(self):
         import pythoncom
         import win32com.client
+        import queue as _q
         pythoncom.CoInitialize()
+        sapi = None
         try:
             sapi = win32com.client.Dispatch("SAPI.SpVoice")
-            tok = None
-            for tk in sapi.GetVoices():
-                if tk.GetDescription() == self._desc:
-                    tok = tk
-                    break
-            if tok is not None:
-                sapi.Voice = tok
-                sapi.Speak("Hola esta es mi voz", 1)
-                saw = False
-                for _ in range(300):
-                    if self._stop:
-                        sapi.Speak("", 2)
-                        break
-                    st = int(sapi.Status.RunningState)
-                    if st == 2:
-                        saw = True
-                    elif saw:
-                        break
-                    self.msleep(100)
+        except Exception:
+            sapi = None
+        while True:
+            try:
+                item = self._q.get(timeout=0.2)
+            except _q.Empty:
+                continue
+            if item is None:
+                break
+            try:
+                if sapi is not None:
+                    tok = None
+                    for tk in sapi.GetVoices():
+                        if tk.GetDescription() == item:
+                            tok = tk
+                            break
+                    if tok is not None:
+                        sapi.Voice = tok
+                        sapi.Speak("Hola esta es mi voz", 1)
+                        saw = False
+                        for _ in range(300):
+                            if self._stopflag:
+                                sapi.Speak("", 2)
+                                break
+                            st = int(sapi.Status.RunningState)
+                            if st == 2:
+                                saw = True
+                            elif saw:
+                                break
+                            self.msleep(100)
+            except Exception:
+                pass
+            self.preview_done.emit(item)
+        try:
+            pythoncom.CoUninitialize()
         except Exception:
             pass
-        finally:
-            pythoncom.CoUninitialize()
 
 
-def _on_preview_finished(self):
-    worker = self.sender()
-    if getattr(self, "_preview_worker", None) is not worker:
-        return
-    self._preview_worker = None
+def _get_preview_worker(self):
+    w = getattr(self, "_preview_worker", None)
+    if w is None:
+        w = PreviewWorker()
+        w.preview_done.connect(self._on_preview_finished)
+        self._preview_worker = w
+        w.start()
+    return w
+
+
+def _on_preview_finished(self, name):
     self._preview_playing = False
     old = getattr(self, "_preview_name", "")
     self._preview_name = ""
@@ -2153,14 +2262,8 @@ def _on_preview_finished(self):
 def _toggle_preview(self, name):
     if getattr(self, "_preview_name", "") == name and getattr(
             self, "_preview_playing", False):
-        w = getattr(self, "_preview_worker", None)
-        if w is not None:
-            w.request_stop()
+        self._get_preview_worker().request_stop()
         return
-    old_w = getattr(self, "_preview_worker", None)
-    if old_w is not None:
-        old_w.request_stop()
-        self._preview_worker = None
     if getattr(self, "_started", False) and not getattr(
             self, "_paused", False):
         try:
@@ -2173,15 +2276,12 @@ def _toggle_preview(self, name):
                 "Reproduccion pausada por previsualizacion.")
         except Exception:
             pass
-    worker = PreviewWorker(name)
-    worker.finished.connect(self._on_preview_finished)
-    self._preview_worker = worker
+    w = self._get_preview_worker()
     self._preview_name = name
     self._preview_playing = True
     self.preview_changed.emit(name, True)
     self.statusBar().showMessage(f"Previsualizando: {name}")
-    worker.start()
-
+    w.request(name)
 
 
 def _stop_preview(self):
@@ -2260,6 +2360,44 @@ def _draw_spin(self):
 
 
 MainWindow._player_play_clicked = _player_play_clicked
+
+
+def _on_slider_pressed(self):
+    self._seeking = True
+
+
+def _on_slider_released(self):
+    self._seeking = False
+    if not getattr(self, "_started", False):
+        return
+    texto = getattr(self, "_texto_para_ratio", "") or \
+        self.text_edit.toPlainText()
+    if not texto:
+        return
+    ratio = self.progress_slider.value() / 100.0
+    off = int(ratio * len(texto))
+    if 0 < off < len(texto):
+        nxt = texto.find(" ", off)
+        off = (nxt + 1) if nxt != -1 else off
+    off = max(0, min(off, len(texto) - 1))
+    sub = texto[off:]
+    if not sub.strip():
+        return
+    try:
+        self.engine.stop()
+    except Exception:
+        pass
+    import time as _time
+    self._resume_offset = off
+    self._saw_running = False
+    self._paused = False
+    self._resume_at = _time.time()
+    self._seconds = ratio * max(1.0, getattr(self, "_est_seconds", 1.0))
+    self.engine.speak_async(sub)
+    self.player_timer.start(100)
+    self._set_player_icon(True, loading=False)
+    self.statusBar().showMessage(
+        f"Reproduciendo desde {self._fmt_time(self._seconds)}")
 
 
 def _on_slider_moved(self, pos):
@@ -2568,3 +2706,17 @@ MainWindow._toggle_preview = _toggle_preview
 MainWindow._stop_preview = _stop_preview
 MainWindow._check_preview_end = _check_preview_end
 MainWindow._avatar_pixmap_cached = _avatar_pixmap_cached
+
+MainWindow._get_preview_worker = _get_preview_worker
+
+MainWindow._voice_lang = _voice_lang
+
+MainWindow._lang_filtered = _lang_filtered
+
+MainWindow._refill_combo = _refill_combo
+
+MainWindow._on_lang_changed = _on_lang_changed
+
+MainWindow._on_slider_pressed = _on_slider_pressed
+
+MainWindow._on_slider_released = _on_slider_released
