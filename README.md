@@ -1,32 +1,10 @@
-# WillpoVoice v1.2.1
+<div align="center">
 
-Aplicacion profesional de Text-to-Speech con voces naturales de Microsoft SAPI, incluyendo NaturalVoice Online (Multilingual).
+# <h1><ins>✨ WILLPOVOICE ✨</ins></h1>
 
-## Caracteristicas
+<h3>🚀 Un subtítulo o descripción corta de tu proyecto aquí 🚀</h3>
 
-- Reproductor profesional con pausa/reanuda real e instantanea
-- Linea de tiempo sincronizada con la lectura real del narrador
-- Cambio de voz en caliente con auto-reproduccion desde el inicio
-- Normalizacion de voz avanzada (numeros, homografos, ingles, simbolos)
-- Preview de voz sin romper el reproductor
-- Exportacion a WAV con procesamiento paralelo
-- Sistema de licencias con KeyGen offline
+</div>
 
-## Instalacion
+---
 
-### Con instalador (recomendado)
-Ejecutar \WillpoVoice-Setup-1.2.1.exe
-### Portable
-Ejecutar \WillpoVoice.exe\ directamente
-
-## Desarrollo
-
-\\powershell
-python -m venv .venv
-.\.venv\Scriptsctivate
-pip install -r requirements.txt
-python run.py
-\
-## Contacto
-
-WillpoTech
