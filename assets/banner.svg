@@ -1,0 +1,28 @@
+<svg viewBox="0 0 1200 300" xmlns="http://w3.org">
+  <style>
+    .bg { fill: url(#bgGrad); }
+    .text-main { font-family: system-ui, -apple-system, sans-serif; font-size: 82px; font-weight: 900; fill: #ffffff; letter-spacing: 6px; text-anchor: middle; }
+    .text-sub { font-family: system-ui, -apple-system, sans-serif; font-size: 22px; font-weight: 500; fill: #94a3b8; letter-spacing: 2px; text-anchor: middle; }
+    .wave1 { fill: #312e81; opacity: 0.4; }
+    .wave2 { fill: #1e1b4b; opacity: 0.7; }
+  </style>
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Fondo con bordes redondeados -->
+  <rect width="1200" height="300" rx="16" class="bg"/>
+  
+  <!-- Ondas de Audio -->
+  <path d="M0,190 C300,290 500,100 800,220 L1200,120 L1200,300 L0,300 Z" class="wave1"/>
+  <path d="M0,230 C400,310 700,150 950,260 L1200,190 L1200,300 L0,300 Z" class="wave2"/>
+  <path d="M0,150 Q150,90 300,150 T600,150 T900,150 T1200,150" fill="none" stroke="#6366f1" stroke-width="2" opacity="0.3"/>
+  <path d="M0,170 Q200,210 400,170 T800,170 T1200,170" fill="none" stroke="#818cf8" stroke-width="1.5" opacity="0.2"/>
+  
+  <!-- Textos -->
+  <text x="50%" y="160" class="text-main">WILLPOVOICE</text>
+  <text x="50%" y="215" class="text-sub">DYNAMIC TTS ENGINE</text>
+</svg>
