@@ -1,20 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_data_files
-
-datas = [('assets', 'assets')]
-datas += collect_data_files('docx')
 
 
 a = Analysis(
     ['run.py'],
     pathex=[],
     binaries=[],
-    datas=datas,
-    hiddenimports=['pypdf', 'docx', 'lameenc', 'win32com'],
+    datas=[],
+    hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['PIL', 'tkinter'],
+    excludes=[],
     noarchive=False,
     optimize=0,
 )
@@ -39,5 +35,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['assets/icons/icon.ico'],
+    icon=['assets/icons/app.ico'],
 )

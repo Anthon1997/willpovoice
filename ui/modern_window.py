@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from PySide6.QtWidgets import QSpacerItem
 from app.config import load_settings, save_settings
+from app.version import APP_VERSION
 from core import file_reader, license_manager
 from core import trial_tokens
 from core.audio_exporter import AudioExporter
@@ -634,7 +635,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.logger = logging.getLogger("naturalvoice_tts.ui")
         self.settings = load_settings()
-        self.setWindowTitle("WillpoVoice v1.2.8")
+        self.setWindowTitle(f"WillpoVoice v{APP_VERSION}")
         self.resize(1280, 800)
         self.setMinimumSize(980, 640)
         icon_path = self._resource_path(Path("assets") / "icons" / "icon.ico")
@@ -856,7 +857,7 @@ def _build_ui(self):
     self._logo_name.setStyleSheet(
         f"color: {TEXT}; font-size: 15px; font-weight: 700; background: transparent;"
     )
-    self._logo_ver = QLabel("v1.2.8")
+    self._logo_ver = QLabel(f"v{APP_VERSION}")
     self._logo_ver.setAlignment(Qt.AlignmentFlag.AlignCenter)
     self._logo_ver.setStyleSheet(
         f"color: {MUTED}; font-size: 10px; background: transparent;"
@@ -1050,7 +1051,7 @@ def _build_ui(self):
     self.lang_combo.setItemIcon(3, QIcon(self._flag_pixmap("world")))
     self.lang_combo.currentIndexChanged.connect(
         lambda _i: self._on_lang_changed())
-    self.lang_combo.setCurrentIndex(0)
+    self.lang_combo.setCurrentIndex(3)
     self.lang_combo.setStyleSheet(combo_qss)
     self.lang_combo.setFixedHeight(38)
     self.lang_combo.setSizePolicy(
