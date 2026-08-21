@@ -1,6 +1,6 @@
 <div align="center">
 
-![WILLPOVOICE](https://shields.io)
+![WILLPOVOICE Banner](banner.svg)
 
 ### 🎙️ Un motor dinámico de Texto a Voz (TTS) rápido, natural y multiplataforma
 
