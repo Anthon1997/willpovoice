@@ -748,6 +748,50 @@ class MainWindow(QMainWindow):
         widget.setGraphicsEffect(eff)
 
 
+class AdvButton(QFrame):
+    """Boton de opciones avanzadas con gear y chevron."""
+
+    clicked = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFixedHeight(40)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(12, 0, 12, 0)
+        lay.setSpacing(8)
+        self.icon = IconLabel("gear", 14, "#7c5cff")
+        lay.addWidget(self.icon)
+        self.label = QLabel("Opciones avanzadas")
+        self.label.setStyleSheet(
+            f"color: {TEXT}; font-size: 12px; font-weight: 600;"
+            " background: transparent;")
+        lay.addWidget(self.label)
+        lay.addStretch()
+        self.chevron = IconLabel("chevron-down", 12, MUTED)
+        lay.addWidget(self.chevron)
+        self.setStyleSheet(
+            f"AdvButton {{ background: {CARD2}; border: 1px solid {BORDER};"
+            " border-radius: 10px; }"
+            f" AdvButton:hover {{ background: #232b3a; }}")
+
+    def mouseReleaseEvent(self, event):
+        self.clicked.emit()
+
+    def set_expanded(self, expanded):
+        glyph = "chevron-up" if expanded else "chevron-down"
+        old = self.chevron
+        lay = self.layout()
+        idx = lay.indexOf(old)
+        nuevo = IconLabel(glyph, 12, MUTED)
+        if idx >= 0:
+            lay.insertWidget(idx, nuevo)
+        else:
+            lay.addWidget(nuevo)
+        old.deleteLater()
+        self.chevron = nuevo
+
+
 class ToolButton(QFrame):
     clicked = Signal()
 
@@ -1047,11 +1091,7 @@ def _build_ui(self):
     sel.addLayout(col2, 1)
     cl.addLayout(sel)
 
-    self.adv_button = QPushButton("＞  Opciones avanzadas")
-    self.adv_button.setCursor(Qt.CursorShape.PointingHandCursor)
-    self.adv_button.setStyleSheet(
-        f"QPushButton {{ background: {CARD2}; color: {TEXT}; border: 1px solid {BORDER}; border-radius: 10px; padding: 8px 14px; text-align: left; }}"
-    )
+    self.adv_button = AdvButton()
     cl.addWidget(self.adv_button)
     self.adv_widget = QWidget()
     al = QHBoxLayout(self.adv_widget)
@@ -1216,7 +1256,7 @@ def _build_ui(self):
     self.limit_spin = QSpinBox()
     self.limit_spin.setRange(500, 20000)
     self.limit_spin.setSingleStep(500)
-    self.limit_spin.setValue(int(self.settings.get("char_limit", 5000)))
+    self.limit_spin.setValue(min(int(self.settings.get("char_limit", 5000)), self._plan_char_limit()))
     row5.addWidget(self.limit_spin)
     row5.addStretch()
     self.license_label = QLabel("")
@@ -1237,7 +1277,8 @@ def _build_ui(self):
     rp.setContentsMargins(14, 14, 14, 14)
     rp.setSpacing(10)
     rh = QHBoxLayout()
-    rt = QLabel("Voces recomendadas")
+    self._panel_title = QLabel("Solo Premium")
+    rt = self._panel_title
     rt.setStyleSheet(f"color: {TEXT}; font-size: 13px; font-weight: 700;")
     self.btn_ver_all = ToolButton("", "Ver todas")
     self.btn_ver_all.setStyleSheet(
@@ -1269,6 +1310,7 @@ def _build_ui(self):
     self.filter_btn.setFixedSize(40, 40)
     search_row.addWidget(search_box, 1)
     search_row.addWidget(self.filter_btn)
+    self.filter_btn.clicked.connect(self._open_filter_menu)
     rp.addLayout(search_row)
     tabs = QHBoxLayout()
     tabs.setSpacing(4)
@@ -1379,7 +1421,7 @@ def _connect_signals(self):
     self.btn_clear.clicked.connect(lambda: self.text_edit.clear())
     self.btn_paste.clicked.connect(lambda: self.text_edit.paste())
     self.btn_clear_hist.clicked.connect(self.clear_history)
-    self.text_edit.textChanged.connect(self.update_counter)
+    self.text_edit.textChanged.connect(self._on_text_limited)
     self.voice_combo.currentIndexChanged.connect(lambda _i: self._on_combo_voice())
     self.search_edit.textChanged.connect(lambda _t: self._rebuild_cards())
     self.rtab_all.clicked.connect(lambda: self._set_rtab("todas"))
@@ -1389,8 +1431,18 @@ def _connect_signals(self):
     self.adv_button.clicked.connect(self._toggle_adv)
     self.vol_slider.valueChanged.connect(lambda v: self.engine.set_volume(v))
     self.volume_slider.valueChanged.connect(lambda v: self.engine.set_volume(v))
-    self.limit_spin.valueChanged.connect(
-        lambda v: self.settings.__setitem__("char_limit", v))
+    def _check_limit(v):
+        plan_limit = self._plan_char_limit()
+        if v > plan_limit:
+            self.limit_spin.blockSignals(True)
+            self.limit_spin.setValue(plan_limit)
+            self.limit_spin.blockSignals(False)
+            self._show_limit_hint()
+        else:
+            self.settings["char_limit"] = v
+        self.update_counter()
+    self.limit_spin.valueChanged.connect(_check_limit)
+    self.limit_spin.setMaximum(999999)
 
 
 def _switch_page(self, index):
@@ -1450,6 +1502,9 @@ def _make_card(self, name, layout):
     favs = self._favorites()
     card = VoiceCard(self, name, premium,
                      name == getattr(self, "_selected_voice", ""), name in favs)
+    from PySide6.QtWidgets import QSizePolicy
+    card.setSizePolicy(QSizePolicy.Policy.Expanding,
+                       QSizePolicy.Policy.Fixed)
     card.clicked.connect(lambda n=name: self._select_voice(n))
     card.fav_toggled.connect(lambda n=name: self._toggle_fav(n))
     card.preview_toggled.connect(lambda n=name: self._toggle_preview(n))
@@ -1469,6 +1524,7 @@ def _voice_lang(self, name):
 
 def _lang_filtered(self, names):
     lang = self.lang_combo.currentText()
+    extra = getattr(self, "_extra_filter", None)
     out = []
     for name in names:
         vl = self._voice_lang(name)
@@ -1477,6 +1533,11 @@ def _lang_filtered(self, names):
         if lang.startswith("Ingl") and vl != "en":
             continue
         if lang.startswith("Multiling") and not self._is_premium(name):
+            continue
+        if extra == "premium" and not self._is_premium(name):
+            continue
+        if extra not in (None, "premium") and \
+                self._voice_lang2(name) != extra:
             continue
         out.append(name)
     return out
@@ -1537,6 +1598,12 @@ def _rebuild_cards(self):
             continue
         if getattr(self, "_rtab", "todas") == "favoritas" and name not in self._favorites():
             continue
+        extra = getattr(self, "_extra_filter", None)
+        if extra == "premium" and not premium:
+            continue
+        if extra not in (None, "premium") and \
+                self._voice_lang2(name) != extra:
+            continue
         if q and q not in name.lower():
             continue
         vl = self._voice_lang(name)
@@ -1551,9 +1618,15 @@ def _rebuild_cards(self):
     self._rec_shown = 0
     self._rec_more_btn = None
     self._append_rec_cards()
+    self.voice_cards_layout.addStretch(1)
 
 
 def _append_rec_cards(self):
+    lay = self.voice_cards_layout
+    if lay.count():
+        last = lay.itemAt(lay.count() - 1)
+        if last is not None and last.spacerItem() is not None:
+            lay.takeAt(lay.count() - 1)
     btn = getattr(self, "_rec_more_btn", None)
     if btn is not None:
         self.voice_cards_layout.removeWidget(btn)
@@ -1580,13 +1653,20 @@ def _append_rec_cards(self):
 def _rebuild_all_page(self):
     self._all_built = True
     self._clear_layout(self.all_layout)
-    self._all_names = list(getattr(self, "_voices", []))
+    self._all_names = self._lang_filtered(
+        list(getattr(self, "_voices", [])))
     self._all_shown = 0
     self._all_more_btn = None
     self._append_all_cards()
+    self.all_layout.addStretch(1)
 
 
 def _append_all_cards(self):
+    lay = self.all_layout
+    if lay.count():
+        last = lay.itemAt(lay.count() - 1)
+        if last is not None and last.spacerItem() is not None:
+            lay.takeAt(lay.count() - 1)
     btn = getattr(self, "_all_more_btn", None)
     if btn is not None:
         self.all_layout.removeWidget(btn)
@@ -1670,6 +1750,7 @@ def _on_combo_voice(self):
     was_active = getattr(self, "_started", False)
     try:
         self.engine.stop()
+        self._seg_queue = []  # seg-clear
     except Exception:
         pass
     self.player_timer.stop()
@@ -1686,7 +1767,7 @@ def _on_combo_voice(self):
         desc = data or voz_texto
     try:
         self.engine.adapter.set_voice(desc)
-        self.statusBar().showMessage(f"Voz cambiada: {voz_texto}")
+        self.statusBar().showMessage(f"Voz cambiada: {_clean_voice_name(voz_texto)}")
         self._last_synth_key = None
         if was_active:
             self.speak_text()
@@ -1724,6 +1805,29 @@ def _toggle_fav(self, name):
     self._rebuild_fav_page()
 
 
+
+def _on_text_limited(self):
+    self._update_counter_safe()
+    limit = min(int(self.settings.get("char_limit", 5000)),
+                self._plan_char_limit())
+    text = self.text_edit.toPlainText()
+    if len(text) > limit:
+        self.text_edit.blockSignals(True)
+        self.text_edit.setPlainText(text[:limit])
+        cursor = self.text_edit.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+        self.text_edit.setTextCursor(cursor)
+        self.text_edit.blockSignals(False)
+        self._update_counter_safe()
+        self._show_limit_overlay()
+
+
+def _update_counter_safe(self):
+    try:
+        self.update_counter()
+    except Exception:
+        pass
+
 def update_counter(self):
     limit = int(self.settings.get("char_limit", 5000))
     total = len(self.text_edit.toPlainText())
@@ -1753,11 +1857,184 @@ def _open_document_dialog(self):
                             f"No se pudo leer el archivo: {exc}")
 
 
+def _show_limit_hint(self):
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QGraphicsOpacityEffect, QFrame
+    hint = getattr(self, "_limit_hint", None)
+    if hint is None:
+        hint = QFrame(self)
+        hint.setObjectName("limithint")
+        hint.setStyleSheet(
+            "#limithint { background: rgba(22,27,34,240);"
+            " border: 1px solid #f5b544; border-radius: 10px; }")
+        hb = QHBoxLayout(hint)
+        hb.setContentsMargins(12, 8, 12, 8)
+        hb.setSpacing(8)
+        ic = QLabel()
+        ic.setPixmap(make_icon("crown", "#f5b544", 14))
+        hb.addWidget(ic)
+        tx = QLabel(
+            "Para añadir más caracteres por conversión, "
+            "actualiza tu plan.")
+        tx.setStyleSheet("color: #f0d878; font-size: 10.5px;")
+        hb.addWidget(tx)
+        btn = QPushButton("Ver planes")
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setStyleSheet(
+            "QPushButton { background: #7c5cff; color: white;"
+            " border: none; border-radius: 6px; padding: 4px 10px;"
+            " font-size: 10px; font-weight: 600; }"
+            " QPushButton:hover { background: #8b6eff; }")
+        btn.clicked.connect(self._open_plans)
+        hb.addWidget(btn)
+        self._limit_hint = hint
+        self._limit_hint_timer = QTimer(self)
+        self._limit_hint_timer.setSingleShot(True)
+        self._limit_hint_timer.timeout.connect(
+            self._fade_limit_hint)
+    hint.adjustSize()
+    rect = self.limit_spin.geometry()
+    parent = self.limit_spin.parent()
+    if parent:
+        pos = parent.mapTo(self, rect.bottomLeft())
+        hint.move(pos.x(), pos.y() + 6)
+    else:
+        hint.move(rect.x(), rect.y() + rect.height() + 6)
+    eff = QGraphicsOpacityEffect(hint)
+    eff.setOpacity(0.0)
+    hint.setGraphicsEffect(eff)
+    hint.show()
+    hint.raise_()
+    from PySide6.QtCore import QPropertyAnimation
+    anim = QPropertyAnimation(eff, b"opacity")
+    anim.setDuration(200)
+    anim.setStartValue(0.0)
+    anim.setEndValue(1.0)
+    self._limit_hint_anim = anim
+    anim.start()
+    self._limit_hint_timer.start(3500)
+
+
+def _show_limit_overlay(self):
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QGraphicsOpacityEffect, QFrame
+    hint = getattr(self, "_limit_overlay", None)
+    if hint is None:
+        hint = QFrame(self)
+        hint.setObjectName("limitoverlay")
+        hint.setStyleSheet(
+            "#limitoverlay { background: rgba(22,27,34,235);"
+            " border: 1px solid #f5b544; border-radius: 10px; }")
+        hb = QHBoxLayout(hint)
+        hb.setContentsMargins(14, 10, 14, 10)
+        hb.setSpacing(8)
+        ic = QLabel()
+        ic.setPixmap(make_icon("sparkles", "#f5b544", 16))
+        hb.addWidget(ic)
+        tx = QLabel(
+            "¿Necesitas generar un proyecto más grande? Mejora tu plan "
+            "y crea proyectos sin límites.")
+        tx.setStyleSheet("color: #f0d878; font-size: 11px;")
+        tx.setWordWrap(True)
+        tx.setMaximumWidth(480)
+        hb.addWidget(tx)
+        btn = QPushButton("Ver planes")
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setStyleSheet(
+            "QPushButton { background: #7c5cff; color: white;"
+            " border: none; border-radius: 6px; padding: 6px 12px;"
+            " font-size: 10.5px; font-weight: 600; }"
+            " QPushButton:hover { background: #8b6eff; }")
+        btn.clicked.connect(self._open_plans)
+        hb.addWidget(btn)
+        self._limit_overlay = hint
+        self._limit_overlay_timer = QTimer(self)
+        self._limit_overlay_timer.setSingleShot(True)
+        self._limit_overlay_timer.timeout.connect(
+            self._fade_limit_overlay)
+    hint.adjustSize()
+    from PySide6.QtCore import QPoint
+    ref = self.text_edit
+    pos = ref.mapTo(self, QPoint(0, ref.height() + 8))
+    hint.move(pos.x(), pos.y())
+    eff = QGraphicsOpacityEffect(hint)
+    eff.setOpacity(0.0)
+    hint.setGraphicsEffect(eff)
+    hint.show()
+    hint.raise_()
+    from PySide6.QtCore import QPropertyAnimation
+    anim = QPropertyAnimation(eff, b"opacity")
+    anim.setDuration(250)
+    anim.setStartValue(0.0)
+    anim.setEndValue(1.0)
+    self._limit_overlay_anim = anim
+    anim.start()
+    self._limit_overlay_timer.start(4500)
+
+
+def _fade_limit_overlay(self):
+    from PySide6.QtCore import QPropertyAnimation
+    from PySide6.QtWidgets import QGraphicsOpacityEffect
+    hint = getattr(self, "_limit_overlay", None)
+    if hint is None:
+        return
+    eff = hint.graphicsEffect()
+    if not isinstance(eff, QGraphicsOpacityEffect):
+        eff = QGraphicsOpacityEffect(hint)
+        hint.setGraphicsEffect(eff)
+    anim = QPropertyAnimation(eff, b"opacity")
+    anim.setDuration(400)
+    anim.setStartValue(1.0)
+    anim.setEndValue(0.0)
+    anim.finished.connect(lambda: hint.hide())
+    self._limit_overlay_anim = anim
+    anim.start()
+
+
+def _fade_limit_hint(self):
+    from PySide6.QtCore import QPropertyAnimation
+    from PySide6.QtWidgets import QGraphicsOpacityEffect
+    hint = getattr(self, "_limit_hint", None)
+    if hint is None:
+        return
+    eff = hint.graphicsEffect()
+    if not isinstance(eff, QGraphicsOpacityEffect):
+        eff = QGraphicsOpacityEffect(hint)
+        hint.setGraphicsEffect(eff)
+    anim = QPropertyAnimation(eff, b"opacity")
+    anim.setDuration(350)
+    anim.setStartValue(1.0)
+    anim.setEndValue(0.0)
+    anim.finished.connect(lambda: hint.hide())
+    self._limit_hint_anim = anim
+    anim.start()
+
+
+def _animate_text_height(self, h):
+    from PySide6.QtCore import (QPropertyAnimation,
+                                QParallelAnimationGroup)
+    te = self.text_edit
+    grp = QParallelAnimationGroup(self)
+    starts = {"minimumHeight": te.minimumHeight(),
+              "maximumHeight": te.maximumHeight()}
+    for name, sv in starts.items():
+        a = QPropertyAnimation(te, name.encode())
+        a.setDuration(160)
+        a.setStartValue(sv)
+        a.setEndValue(h)
+        grp.addAnimation(a)
+    self._text_h_anim = grp
+    grp.start()
+
+
 def _toggle_adv(self):
     show = not self.adv_widget.isVisible()
     self.adv_widget.setVisible(show)
-    self.adv_button.setText(
-        "＞  Opciones avanzadas" if not show else "＜  Opciones avanzadas")
+    self._animate_text_height(78 if show else 120)
+    try:
+        self.adv_button.set_expanded(show)
+    except Exception:
+        pass
 
 
 def _toggle_theme_msg(self):
@@ -1791,7 +2068,21 @@ def _tick_player(self):
             return
     if state != 2:
         import time as _time
-        if _time.time() - getattr(self, "_resume_at", 0.0) < 1.0:
+        if _time.time() - getattr(self, "_resume_at", 0.0) < 0.6:
+            return
+        q = getattr(self, "_seg_queue", [])
+        if q and getattr(self, "_saw_running", False):
+            a, b, boost = q.pop(0)
+            self._seg_queue = q
+            self._resume_offset = a
+            self._saw_running = False
+            self._resume_at = _time.time()
+            texto = getattr(self, "_texto_para_ratio", "")
+            self.engine.set_rate(
+                max(-10, min(10, self.rate_slider.value() + boost)))
+            self.engine.set_volume(
+                min(100, self.volume_slider.value() + (6 if boost else 0)))
+            self.engine.speak_async(self._tts_text(texto[a:b]))
             return
         self.player_timer.stop()
         self._started = False
@@ -1856,6 +2147,7 @@ def speak_text(self):
             return
         try:
             self.engine.stop()
+            self._seg_queue = []  # seg-clear
         except Exception:
             pass
         voice_data = self.voice_combo.currentData(Qt.ItemDataRole.UserRole)
@@ -1868,8 +2160,18 @@ def speak_text(self):
                 self.engine.adapter.set_voice(desc)
             except Exception:
                 pass
-        self.engine.set_rate(self.rate_slider.value())
-        self.engine.set_volume(self.volume_slider.value())
+        import re as _re
+        frases = [f for f in _re.split(r"(?<=[.!?…])\s+", text)
+                  if f.strip()]
+        emo = sum(1 for f in frases
+                  if ("!" in f or "¡" in f or "?" in f or "¿" in f))
+        boost = 0
+        if frases and emo > 0 and (emo * 2) >= len(frases):
+            boost = 2 if any("!" in f or "¡" in f for f in frases) else 1
+        self.engine.set_rate(
+            max(-10, min(10, self.rate_slider.value() + boost)))
+        self.engine.set_volume(
+            min(100, self.volume_slider.value() + (6 if boost else 0)))
         self._add_to_history(text)
         self.settings["conv_today"] = int(self.settings.get("conv_today", 0)) + 1
         self.stat_conv.value_label.setText(str(self.settings["conv_today"]))
@@ -1890,9 +2192,29 @@ def speak_text(self):
         self._resume_at = 0.0
         self._last_synth_key = (
             self.voice_combo.currentText().strip(), text)
-        self.engine.speak_async(text)
+        segs = self._express_segments(text)
+        boosts = {s[2] for s in segs}
+        has_emo = any(s[2] > 0 for s in segs)
+        if has_emo and len(segs) > 1:
+            self._seg_queue = list(segs[1:])
+            a, b, boost = segs[0]
+            self._resume_offset = a
+            self._show_express_hint()
+            self.engine.set_rate(
+                max(-10, min(10, self.rate_slider.value() + boost)))
+            self.engine.set_volume(
+                min(100, self.volume_slider.value() + (6 if boost else 0)))
+            self.engine.speak_async(self._tts_text(text[a:b]))
+        else:
+            self._seg_queue = []
+            boost = max(s[2] for s in segs) if segs else 0
+            self.engine.set_rate(
+                max(-10, min(10, self.rate_slider.value() + boost)))
+            self.engine.set_volume(
+                min(100, self.volume_slider.value() + (6 if boost else 0)))
+            self.engine.speak_async(self._tts_text(text))
         self._trial_spend(text)
-        self.player_timer.start(100)
+        self.player_timer.start(50)
     except Exception as exc:
         QMessageBox.warning(self, "Error", f"No se pudo reproducir: {exc}")
 
@@ -1914,6 +2236,7 @@ def stop_speech(self):
     try:
         self._stop_preview()
         self.engine.stop()
+        self._seg_queue = []  # seg-clear
         self.player_timer.stop()
         self._seconds = 0
         self._started = False
@@ -1928,15 +2251,82 @@ def stop_speech(self):
 
 
 def _show_export_menu(self):
-    menu = QMenu(self)
-    wav = menu.addAction("Audio WAV  (.wav, sin compresion)")
-    mp3 = menu.addAction("Audio MP3  (.mp3, comprimido)")
-    action = menu.exec(self.export_button.mapToGlobal(
-        QPoint(0, self.export_button.height())))
-    if action == wav:
-        self.export_wav()
-    elif action == mp3:
-        self.export_mp3()
+    from PySide6.QtCore import QPoint, QPropertyAnimation
+    from PySide6.QtGui import QCursor
+    from PySide6.QtWidgets import QApplication
+    app = QApplication.instance()
+    if "QToolTip" not in (app.styleSheet() or ""):
+        app.setStyleSheet(
+            (app.styleSheet() or "") +
+            " QToolTip { background: #161b22; color: #e6edf3;"
+            " border: 1px solid #f5b544; border-radius: 8px;"
+            " padding: 6px 10px; font-size: 10.5px; }")
+    pop = QFrame(self, Qt.WindowType.Popup)
+    pop.setObjectName("exportpop")
+    pop.setFixedWidth(252)
+    pop.setStyleSheet(
+        "#exportpop { background: #161b22; border: 1px solid #30363d;"
+        " border-radius: 12px; }")
+    v = QVBoxLayout(pop)
+    v.setContentsMargins(8, 8, 8, 8)
+    v.setSpacing(4)
+    opts = (
+        ("wav", "wave", "#2dd4bf", "Audio WAV",
+         "Máxima calidad, sin compresión. Para editar.",
+         self.export_wav),
+        ("mp3", "volume", "#7c5cff", "Audio MP3",
+         "Comprimido y ligero. Para compartir.",
+         self.export_mp3),
+    )
+    for kind, icon, color, label, tip, cb in opts:
+        row = QFrame()
+        row.setObjectName("row_" + kind)
+        row.setCursor(Qt.CursorShape.PointingHandCursor)
+        row.setStyleSheet(
+            "#row_" + kind + " { background: transparent;"
+            " border-radius: 8px; }"
+            " #row_" + kind + ":hover { background: #232b3a; }")
+        h = QHBoxLayout(row)
+        h.setContentsMargins(10, 9, 10, 9)
+        h.setSpacing(10)
+        ic = QLabel()
+        ic.setPixmap(make_icon(icon, color, 15))
+        h.addWidget(ic)
+        lb = QLabel(label)
+        lb.setStyleSheet(
+            "color: #e6edf3; font-size: 12px; font-weight: 600;"
+            " background: transparent;")
+        h.addWidget(lb)
+        h.addStretch(1)
+        q = QLabel("?")
+        q.setFixedSize(18, 18)
+        q.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        q.setStyleSheet(
+            "background: #232b3a; color: #8b949e; border-radius: 9px;"
+            " font-size: 10px; font-weight: 700;")
+        q.setToolTip(tip)
+        q.mouseReleaseEvent = lambda ev: None
+        h.addWidget(q)
+        row.mouseReleaseEvent = lambda ev, c=cb: (pop.close(), c())
+        v.addWidget(row)
+    btn = None
+    for name in ("export_button", "btn_export", "export_btn"):
+        btn = getattr(self, name, None)
+        if btn is not None:
+            break
+    if btn is not None:
+        pos = btn.mapToGlobal(QPoint(0, btn.height() + 6))
+    else:
+        pos = QCursor.pos()
+    pop.move(pos)
+    self._export_pop = pop
+    pop.show()
+    anim = QPropertyAnimation(pop, b"windowOpacity")
+    anim.setDuration(140)
+    anim.setStartValue(0.0)
+    anim.setEndValue(1.0)
+    pop._fade = anim
+    anim.start()
 
 
 def export_wav(self):
@@ -1954,7 +2344,7 @@ def export_wav(self):
     if not path:
         return
     self._trial_spend(text)
-    self._run_export(text, path, False)
+    self._run_export(self._tts_text(text), path, False)
 
 
 def export_mp3(self):
@@ -1972,18 +2362,199 @@ def export_mp3(self):
         path += ".mp3"
     self._mp3_final_path = path
     self._trial_spend(text)
-    self._run_export(text, tempfile.mktemp(suffix=".wav"), True)
+    self._run_export(self._tts_text(text), tempfile.mktemp(suffix=".wav"), True)
+
+
+from PySide6.QtWidgets import QDialog
+
+
+class ExportProgressDialog(QDialog):
+    """Barra de progreso de exportacion (estilo WillpoVoice)."""
+
+    def __init__(self, parent, title="Exportando audio"):
+        super().__init__(parent)
+        self.setModal(True)
+        self.setFixedWidth(420)
+        self.setWindowTitle(title)
+        self.setStyleSheet(
+            "ExportProgressDialog { background: #0b0e14; }")
+        v = QVBoxLayout(self)
+        v.setContentsMargins(26, 22, 26, 20)
+        v.setSpacing(12)
+        row = QHBoxLayout()
+        ic = QLabel()
+        ic.setPixmap(make_icon("bolt", "#7c5cff", 20))
+        row.addWidget(ic)
+        ttl = QLabel(title)
+        ttl.setStyleSheet(
+            "color: #e6edf3; font-size: 14px; font-weight: 700;")
+        row.addWidget(ttl)
+        row.addStretch(1)
+        self._pct = QLabel("0%")
+        self._pct.setStyleSheet(
+            "color: #7c5cff; font-size: 12px; font-weight: 700;")
+        row.addWidget(self._pct)
+        v.addLayout(row)
+        from PySide6.QtWidgets import QProgressBar
+        self.bar = QProgressBar()
+        self.bar.setRange(0, 100)
+        self.bar.setValue(0)
+        self.bar.setFixedHeight(10)
+        self.bar.setTextVisible(False)
+        self.bar.setStyleSheet(
+            "QProgressBar { background: #161b22; border: 1px solid #30363d;"
+            " border-radius: 5px; }"
+            " QProgressBar::chunk { background: qlineargradient("
+            "x1:0,y1:0,x2:1,y2:0, stop:0 #6d5df0, stop:1 #7c5cff);"
+            " border-radius: 5px; }")
+        v.addWidget(self.bar)
+        self._status = QLabel("Preparando sintesis...")
+        self._status.setStyleSheet("color: #8b949e; font-size: 10.5px;")
+        v.addWidget(self._status)
+        from PySide6.QtCore import QTimer
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._tick_est)
+        self._est = 1.0
+        self._elapsed = 0.0
+
+    def start_estimated(self, seconds):
+        self._est = max(1.0, seconds)
+        self._elapsed = 0.0
+        self._timer.start(100)
+
+    def _tick_est(self):
+        self._elapsed += 0.1
+        target = 90.0 * min(1.0, self._elapsed / self._est)
+        if target > self.bar.value():
+            self.bar.setValue(int(target))
+            self._pct.setText(f"{int(target)}%")
+
+    def set_progress(self, pct, status=None):
+        self._timer.stop()
+        pct = max(0, min(100, int(pct)))
+        self.bar.setValue(pct)
+        self._pct.setText(f"{pct}%")
+        if status:
+            self._status.setText(status)
+
+    def set_status(self, status):
+        self._status.setText(status)
+
+    def finish(self, status="Completado"):
+        self._timer.stop()
+        self.bar.setValue(100)
+        self._pct.setText("100%")
+        self._status.setText(status)
+        from PySide6.QtWidgets import QApplication
+        QApplication.processEvents()
+
+
+def _concat_wavs(self, paths, output):
+    import wave
+    first = None
+    chunks = []
+    for pp in paths:
+        with wave.open(str(pp), "rb") as seg:
+            pr = seg.getparams()
+            if first is None:
+                first = pr
+            chunks.append((pr, seg.readframes(seg.getnframes())))
+    with wave.open(str(output), "wb") as out:
+        out.setparams(first)
+        for pr, data in chunks:
+            if (pr.nchannels, pr.sampwidth, pr.framerate) != (
+                    first.nchannels, first.sampwidth, first.framerate):
+                raise ValueError("formatos de segmento incompatibles")
+            out.writeframes(data)
+
+
+def _run_export_expressive(self, text, path, is_mp3, voice, dlg=None):
+    import tempfile
+    from PySide6.QtCore import QEventLoop
+    segs = self._express_segments(text)
+    tmp = Path(tempfile.mkdtemp())
+    temp_paths = []
+    try:
+        n = max(1, len(segs))
+        for i, (a, b, boost) in enumerate(segs):
+            if dlg is not None:
+                dlg.set_progress(
+                    int(i * 90 / n),
+                    f"Sintetizando fragmento {i + 1} de {n}...")
+            seg_text = text[a:b]
+            if not seg_text.strip():
+                continue
+            seg_path = tmp / f"seg_{i}.wav"
+            temp_paths.append(seg_path)
+            rate = max(-10, min(10, self.rate_slider.value() + boost))
+            volume = min(100, self.volume_slider.value() +
+                         (6 if boost else 0))
+            loop = QEventLoop()
+            result = {}
+            w = ExportWorker(
+                exporter=self.exporter, text=seg_text,
+                path=str(seg_path), voice=voice,
+                rate=rate, volume=volume)
+            w.export_ok.connect(
+                lambda p: (result.__setitem__("ok", p), loop.quit()))
+            w.export_error.connect(
+                lambda m: (result.__setitem__("err", m), loop.quit()))
+            w.start()
+            loop.exec()
+            if "err" in result:
+                raise RuntimeError(result["err"])
+            if not seg_path.exists():
+                raise RuntimeError("segmento no generado")
+        if dlg is not None:
+            dlg.set_progress(95, "Uniendo audio...")
+        self._concat_wavs([str(x) for x in temp_paths], path)
+        if dlg is not None:
+            dlg.finish("Guardando archivo...")
+            dlg.close()
+        self.on_export_ok(path)
+    finally:
+        for x in temp_paths:
+            try:
+                Path(x).unlink(missing_ok=True)
+            except Exception:
+                pass
+        try:
+            tmp.rmdir()
+        except Exception:
+            pass
 
 
 def _run_export(self, text, path, is_mp3):
     voice = self.voice_combo.currentData(Qt.ItemDataRole.UserRole)
-    self.statusBar().showMessage("Exportando audio...")
-    self.export_worker = ExportWorker(
-        exporter=self.exporter, text=text, path=path, voice=voice,
-        rate=self.rate_slider.value(), volume=self.volume_slider.value())
-    self.export_worker.export_ok.connect(self.on_export_ok)
-    self.export_worker.export_error.connect(self.on_export_error)
-    self.export_worker.start()
+    dlg = ExportProgressDialog(
+        self, "Exportando MP3..." if is_mp3 else "Exportando WAV...")
+    dlg.show()
+    segs = self._express_segments(text)
+    has_boost = any(s[2] > 0 for s in segs)
+    
+    if has_boost:
+        # Flujo segmentado (con expresividad)
+        self.statusBar().showMessage("Exportando con expresividad...")
+        try:
+            self._run_export_expressive(text, path, is_mp3, voice, dlg)
+        except Exception as exc:
+            dlg.close()
+            self.on_export_error(str(exc))
+    else:
+        # Flujo normal (rápido, sin boost)
+        self.statusBar().showMessage("Exportando audio...")
+        self.export_worker = ExportWorker(
+            exporter=self.exporter, text=text, path=path, voice=voice,
+            rate=self.rate_slider.value(), volume=self.volume_slider.value())
+        words = len(text.split()) or 1
+        factor = 1.0 + self.rate_slider.value() / 20.0
+        dlg.start_estimated(words / (2.8 * factor) + 0.6)
+        dlg.set_status("Sintetizando voz...")
+        self.export_worker.export_ok.connect(
+            lambda p: (dlg.finish(), dlg.close(), self.on_export_ok(p)))
+        self.export_worker.export_error.connect(
+            lambda m: (dlg.close(), self.on_export_error(m)))
+        self.export_worker.start()
 
 
 def on_export_ok(self, path):
@@ -2137,9 +2708,21 @@ def closeEvent(self, event):
         self.settings["last_voice"] = self._current_voice()
         save_settings(self.settings)
         self.engine.stop()
+        self._seg_queue = []  # seg-clear
     except Exception:
         self.logger.exception("Error al cerrar.")
     event.accept()
+
+
+def _plan_char_limit(self):
+    from core import license_manager
+    details = license_manager.license_details()
+    tier = details.get("tier", "")
+    if "por vida" in tier.lower() or "lifetime" in tier.lower():
+        return 999999
+    if "mensual" in tier.lower():
+        return 20000
+    return 5000
 
 
 def _current_voice(self):
@@ -2166,6 +2749,15 @@ MainWindow.update_counter = update_counter
 MainWindow._copy_text = _copy_text
 MainWindow._open_document_dialog = _open_document_dialog
 MainWindow._toggle_adv = _toggle_adv
+MainWindow._animate_text_height = _animate_text_height
+MainWindow._plan_char_limit = _plan_char_limit
+MainWindow._show_limit_hint = _show_limit_hint
+MainWindow._fade_limit_hint = _fade_limit_hint
+MainWindow._show_limit_overlay = _show_limit_overlay
+MainWindow._fade_limit_overlay = _fade_limit_overlay
+MainWindow._update_counter = update_counter
+MainWindow._on_text_limited = _on_text_limited
+MainWindow._update_counter_safe = _update_counter_safe
 MainWindow._toggle_theme_msg = _toggle_theme_msg
 MainWindow._fmt_time = _fmt_time
 MainWindow._tick_player = _tick_player
@@ -2175,6 +2767,8 @@ MainWindow._show_export_menu = _show_export_menu
 MainWindow.export_wav = export_wav
 MainWindow.export_mp3 = export_mp3
 MainWindow._run_export = _run_export
+MainWindow._concat_wavs = _concat_wavs
+MainWindow._run_export_expressive = _run_export_expressive
 MainWindow.on_export_ok = on_export_ok
 MainWindow.on_export_error = on_export_error
 MainWindow._load_history = _load_history
@@ -2305,7 +2899,7 @@ def _on_preview_finished(self, name):
             self.engine.adapter.sapi.Resume()
             self._paused = False
             self._resume_at = _time.time()
-            self.player_timer.start(100)
+            self.player_timer.start(50)
             self._set_player_icon(True, loading=False)
             self.statusBar().showMessage("Reanudando reproduccion...")
         except Exception:
@@ -2333,7 +2927,7 @@ def _toggle_preview(self, name):
     self._preview_name = name
     self._preview_playing = True
     self.preview_changed.emit(name, True)
-    self.statusBar().showMessage(f"Previsualizando: {name}")
+    self.statusBar().showMessage(f"Previsualizando: {_clean_voice_name(name)}")
     w.request(name)
 
 
@@ -2365,7 +2959,7 @@ def _player_play_clicked(self):
             self._paused = False
             import time as _time
             self._resume_at = _time.time()
-            self.player_timer.start(100)
+            self.player_timer.start(50)
             self._set_player_icon(True, loading=False)
             self.statusBar().showMessage("Reanudando reproduccion...")
         else:
@@ -2438,6 +3032,7 @@ def _on_slider_released(self):
         return
     try:
         self.engine.stop()
+        self._seg_queue = []  # seg-clear
     except Exception:
         pass
     import time as _time
@@ -2446,8 +3041,8 @@ def _on_slider_released(self):
     self._paused = False
     self._resume_at = _time.time()
     self._seconds = ratio * max(1.0, getattr(self, "_est_seconds", 1.0))
-    self.engine.speak_async(sub)
-    self.player_timer.start(100)
+    self.engine.speak_async(self._tts_text(sub))
+    self.player_timer.start(50)
     self._set_player_icon(True, loading=False)
     self.statusBar().showMessage(
         f"Reproduciendo desde {self._fmt_time(self._seconds)}")
@@ -2507,7 +3102,7 @@ class VoiceSelectWorker(QThread):
 
 def _on_voice_loaded(self, name):
     if name == getattr(self, "_selected_voice", ""):
-        self.statusBar().showMessage(f"Voz lista: {name}")
+        self.statusBar().showMessage(f"Voz lista: {_clean_voice_name(name)}")
 
 
 def _deferred_rebuilds(self):
@@ -3081,18 +3676,19 @@ class PlansDialog(QDialog):
         v.addWidget(t2)
         self._card(v, "flask", "#8b949e", "Gratis", "S/ 0",
                    ["7 dias de prueba", "10,000 tokens incluidos",
+                    "Hasta 5,000 caracteres por conversión",
                     "Todas las voces premium"],
                    btn=("Iniciar prueba gratuita", False),
                    on_buy=self._start_trial)
         self._card(v, "coins", "#58a6ff", "Mensual", "S/ 10",
-                   ["20,000 tokens al mes", "Todas las voces premium",
-                    "Soporte por Discord"],
+                   ["20,000 tokens al mes", "Hasta 20,000 caracteres",
+                    "Todas las voces premium", "Soporte por Discord"],
                    btn=("Comprar", False),
                    on_buy=lambda: self._buy(
                        "Mensual", 10, YAPE_URL_MENSUAL))
         self._card(v, "sparkles", "#f5b544", "Lifetime", "S/ 30",
-                   ["Uso ILIMITADO, sin tokens", "Voces nuevas para siempre",
-                    "Soporte prioritario de por vida"],
+                   ["Uso ILIMITADO, sin tokens", "Caracteres ILIMITADOS",
+                    "Voces nuevas para siempre", "Soporte prioritario de por vida"],
                    btn=("Comprar", True), badge="Recomendado",
                    on_buy=lambda: self._buy(
                        "Lifetime", 30, YAPE_URL_LIFETIME))
@@ -3207,3 +3803,314 @@ def _open_plans(self):
 
 
 MainWindow._open_plans = _open_plans
+
+
+def _clean_voice_name(name):
+    n = (name or "").strip()
+    if n.lower().startswith("microsoft "):
+        n = n[10:]
+    low = n.lower()
+    if "multilingual" in low:
+        base = low.split("multilingual")[0].strip()
+        if base:
+            base = base[0].upper() + base[1:]
+        return f"{base} Multilingüe" if base else "Multilingüe"
+    n = (n.replace("Online (Natural)", " ").replace("(Natural)", " ")
+           .replace("Online", " "))
+    return " ".join(n.split())
+
+
+
+
+def _tts_text(self, text):
+    voz = ""
+    try:
+        voz = self.voice_combo.currentText()
+    except Exception:
+        pass
+    if "multilingual" not in voz.lower():
+        return text
+    repl = {
+        "ña": "nia", "ñe": "nie", "ñi": "niie", "ño": "nio", "ñu": "niu",
+        "Ña": "Nia", "Ñe": "Nie", "Ñi": "Niie", "Ño": "Nio", "Ñu": "Niu",
+        "ÑA": "NIA", "ÑE": "NIE", "ÑI": "NIIE", "ÑO": "NIO", "ÑU": "NIU",
+    }
+    out = text
+    for k, v in repl.items():
+        out = out.replace(k, v)
+    import re as _re
+    out = _re.sub(r"!+", "!!", out)
+    out = _re.sub(r"\?+", "??", out)
+    return out
+
+
+MainWindow._tts_text = _tts_text
+
+
+def _express_segments(self, text):
+    import re as _re
+    parts = []
+    last = 0
+    for m in _re.finditer(r"(?<=[.!?…])\s+", text):
+        parts.append((last, m.start()))
+        last = m.end()
+    if last < len(text):
+        parts.append((last, len(text)))
+    segs = []
+    for a, b in parts:
+        s = text[a:b]
+        if not s.strip():
+            continue
+        if "!" in s or "¡" in s:
+            segs.append((a, b, 2))
+        elif "?" in s or "¿" in s:
+            segs.append((a, b, 1))
+        else:
+            segs.append((a, b, 0))
+    merged = []
+    for a, b, boost in segs:
+        if merged and merged[-1][2] == boost:
+            merged[-1] = (merged[-1][0], b, boost)
+        else:
+            merged.append((a, b, boost))
+    return merged
+
+
+MainWindow._express_segments = _express_segments
+
+
+def _show_express_hint(self):
+    from PySide6.QtCore import QTimer, QPropertyAnimation
+    from PySide6.QtWidgets import QGraphicsOpacityEffect
+    hint = getattr(self, "_express_hint", None)
+    if hint is None:
+        hint = QFrame(self)
+        hint.setObjectName("expresshint")
+        hint.setStyleSheet(
+            "#expresshint { background: rgba(22,27,34,235);"
+            " border: 1px solid #30363d; border-radius: 10px; }")
+        hb = QHBoxLayout(hint)
+        hb.setContentsMargins(12, 8, 12, 8)
+        hb.setSpacing(8)
+        ic = QLabel()
+        ic.setPixmap(make_icon("sparkles", "#f5b544", 14))
+        hb.addWidget(ic)
+        tx = QLabel(
+            "Modo expresivo activo: la vista previa en vivo puede "
+            "incluir micro-pausas entre frases. "
+            "Al exportar, tu audio quedara fluido y sin cortes.")
+        tx.setStyleSheet("color: #c9d1d9; font-size: 10.5px;")
+        tx.setWordWrap(True)
+        tx.setMaximumWidth(560)
+        hb.addWidget(tx)
+        self._express_hint = hint
+        self._express_hint_timer = QTimer(self)
+        self._express_hint_timer.setSingleShot(True)
+        self._express_hint_timer.timeout.connect(
+            self._fade_express_hint)
+    hint.adjustSize()
+    from PySide6.QtCore import QPoint
+    cw = self.centralWidget()
+    ref = getattr(self, "text_edit", None) or cw
+    if ref is not None:
+        bx = ref.mapTo(self, QPoint(0, 0)).x()
+        x = bx + (ref.width() - hint.width()) // 2
+    else:
+        x = (self.width() - hint.width()) // 2
+    y = (cw.mapTo(self, QPoint(0, 0)).y() + 70) if cw is not None else 70
+    hint.move(x, y)
+    eff = QGraphicsOpacityEffect(hint)
+    eff.setOpacity(0.0)
+    hint.setGraphicsEffect(eff)
+    hint.show()
+    hint.raise_()
+    anim = QPropertyAnimation(eff, b"opacity")
+    anim.setDuration(250)
+    anim.setStartValue(0.0)
+    anim.setEndValue(1.0)
+    self._express_hint_anim = anim
+    anim.start()
+    self._express_hint_timer.start(4200)
+
+
+def _fade_express_hint(self):
+    from PySide6.QtCore import QPropertyAnimation
+    from PySide6.QtWidgets import QGraphicsOpacityEffect
+    hint = getattr(self, "_express_hint", None)
+    if hint is None:
+        return
+    eff = hint.graphicsEffect()
+    if not isinstance(eff, QGraphicsOpacityEffect):
+        eff = QGraphicsOpacityEffect(hint)
+        hint.setGraphicsEffect(eff)
+    anim = QPropertyAnimation(eff, b"opacity")
+    anim.setDuration(400)
+    anim.setStartValue(1.0)
+    anim.setEndValue(0.0)
+    anim.finished.connect(lambda: hint.hide())
+    self._express_hint_anim = anim
+    anim.start()
+
+
+MainWindow._show_express_hint = _show_express_hint
+MainWindow._fade_express_hint = _fade_express_hint
+
+
+LANG_TABLE = [
+    ("es", "Español", "es", ["spanish", "espa", "(es)", "es-"]),
+    ("en", "Inglés", "us", ["english", "ingl", "(en)", "en-"]),
+    ("de", "Alemán", "de", ["german", "alem", "(de)", "de-"]),
+    ("fr", "Francés", "fr", ["french", "franc", "(fr)", "fr-"]),
+    ("it", "Italiano", "it", ["italian", "ital", "(it)", "it-"]),
+    ("pt", "Portugués", "br", ["portug", "(pt)", "pt-"]),
+    ("zh", "Chino", "cn", ["chinese", "chino", "(zh)", "zh-"]),
+    ("ja", "Japonés", "jp", ["japanese", "japon", "(ja)", "ja-"]),
+    ("ko", "Coreano", "kr", ["korean", "core", "(ko)", "ko-"]),
+    ("ru", "Ruso", "ru", ["russian", "ruso", "(ru)", "ru-"]),
+    ("ar", "Árabe", "sa", ["arabic", "arab", "(ar)", "ar-"]),
+    ("hi", "Hindi", "in", ["hindi", "(hi)", "hi-"]),
+    ("nl", "Neerlandés", "nl", ["dutch", "neerland", "(nl)", "nl-"]),
+    ("pl", "Polaco", "pl", ["polish", "polaco", "(pl)", "pl-"]),
+    ("tr", "Turco", "tr", ["turkish", "turco", "(tr)", "tr-"]),
+    ("sv", "Sueco", "se", ["swedish", "sueco", "(sv)", "sv-"]),
+    ("da", "Danés", "dk", ["danish", "danes", "(da)", "da-"]),
+    ("no", "Noruego", "no", ["norwegian", "noruego", "(nb)"]),
+    ("fi", "Finés", "fi", ["finnish", "fines", "(fi)", "fi-"]),
+    ("el", "Griego", "gr", ["greek", "griego", "(el)", "el-"]),
+    ("cs", "Checo", "cz", ["czech", "checo", "(cs)", "cs-"]),
+    ("hu", "Húngaro", "hu", ["hungarian", "hungar", "(hu)", "hu-"]),
+    ("ro", "Rumano", "ro", ["romanian", "rumano", "(ro)", "ro-"]),
+    ("sk", "Eslovaco", "sk", ["slovak", "eslovaco", "(sk)", "sk-"]),
+    ("th", "Tailandés", "th", ["thai", "tailand", "(th)", "th-"]),
+    ("vi", "Vietnamita", "vn", ["vietnam", "(vi)", "vi-"]),
+    ("id", "Indonesio", "id", ["indonesian", "indonesio", "(id)"]),
+    ("he", "Hebreo", "il", ["hebrew", "hebreo", "(he)", "he-"]),
+    ("uk", "Ucraniano", "ua", ["ukrainian", "ucraniano", "(uk)"]),
+]
+
+
+def _voice_lang2(self, name):
+    low = name.lower()
+    if "multilingual" in low:
+        return "multi"
+    for code, label, flag, keys in LANG_TABLE:
+        if any(k in low for k in keys):
+            return code
+    return "otro"
+
+
+def _available_langs(self):
+    out = []
+    for item in LANG_TABLE:
+        code = item[0]
+        if any(self._voice_lang2(v) == code
+               for v in getattr(self, "_voices", [])):
+            out.append(item)
+    return out
+
+
+def _flag_pix(self, code, size=18):
+    from PySide6.QtSvg import QSvgRenderer
+    from PySide6.QtCore import QByteArray
+    import sys
+    base = Path(getattr(sys, "_MEIPASS",
+                        Path(__file__).resolve().parents[1]))
+    fp = base / "assets" / "icons" / "svg" / f"flag_{code}.svg"
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    if fp.exists():
+        try:
+            r = QSvgRenderer(QByteArray(fp.read_bytes()))
+            if r.isValid():
+                q = QPainter(pix)
+                r.render(q)
+                q.end()
+                return pix
+        except Exception:
+            pass
+    q = QPainter(pix)
+    q.setBrush(QColor("#30363d"))
+    q.setPen(Qt.PenStyle.NoPen)
+    q.drawEllipse(0, 0, size, size)
+    q.end()
+    return pix
+
+
+def _open_filter_menu(self):
+    try:
+        self._open_filter_menu_impl()
+    except Exception:
+        import traceback
+        traceback.print_exc()
+
+
+def _open_filter_menu_impl(self):
+    from PySide6.QtWidgets import QMenu
+    from PySide6.QtCore import QPoint
+    m = QMenu(self)
+    m.setStyleSheet(
+        "QMenu { background: #161b22; border: 1px solid #30363d;"
+        " border-radius: 10px; padding: 6px; }"
+        " QMenu::item { color: #e6edf3; padding: 6px 20px 6px 10px;"
+        " border-radius: 6px; }"
+        " QMenu::item:selected { background: #232b3a; }"
+        " QMenu::separator { height: 1px; background: #30363d;"
+        " margin: 6px 10px; }"
+        " QMenu::indicator { width: 14px; height: 14px; }")
+    cur = getattr(self, "_extra_filter", None)
+    a_all = m.addAction(
+        QIcon(make_icon("globe", "#58a6ff", 14)), "Todos los idiomas")
+    a_all.setData("all")
+    a_all.setCheckable(True)
+    a_all.setChecked(cur is None)
+    a_pre = m.addAction(
+        QIcon(make_icon("crown", "#f5b544", 14)), "Solo Premium")
+    a_pre.setData("premium")
+    a_pre.setCheckable(True)
+    a_pre.setChecked(cur == "premium")
+    m.addSeparator()
+    for code, label, flag, keys in self._available_langs():
+        a = m.addAction(QIcon(self._flag_pix(flag)), label)
+        a.setData(code)
+        a.setCheckable(True)
+        a.setChecked(cur == code)
+    m.triggered.connect(self._apply_filter)
+    pos = self.filter_btn.mapToGlobal(
+        QPoint(0, self.filter_btn.height() + 4))
+    m.exec(pos)
+
+
+def _apply_filter(self, action):
+    data = action.data()
+    self._extra_filter = None if data == "all" else data
+    try:
+        self.lang_combo.blockSignals(True)
+        for i in range(self.lang_combo.count()):
+            if self.lang_combo.itemText(i).startswith("Todos"):
+                self.lang_combo.setCurrentIndex(i)
+                break
+    finally:
+        self.lang_combo.blockSignals(False)
+    if data == "all":
+        title = "Todos los idiomas"
+    elif data == "premium":
+        title = "Solo Premium"
+    else:
+        title = next((it[1] for it in LANG_TABLE if it[0] == data),
+                     "Voces")
+    if hasattr(self, "_panel_title"):
+        self._panel_title.setText(title)
+    self._refill_combo()
+    self._rebuild_cards()
+    if getattr(self, "_all_built", False):
+        self._rebuild_all_page()
+    self.filter_btn.setToolTip(f"Filtro activo: {action.text()}")
+
+
+MainWindow._voice_lang2 = _voice_lang2
+MainWindow._available_langs = _available_langs
+MainWindow._flag_pix = _flag_pix
+MainWindow._open_filter_menu = _open_filter_menu
+MainWindow._open_filter_menu_impl = _open_filter_menu_impl
+MainWindow._apply_filter = _apply_filter
+
