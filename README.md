@@ -1,6 +1,6 @@
 <div align="center">
 
-![WILLPOVOICE Banner](banner.svg)
+![WILLPOVOICE Banner](https://githubusercontent.com)
 
 ### 🎙️ Un motor dinámico de Texto a Voz (TTS) rápido, natural y multiplataforma
 
