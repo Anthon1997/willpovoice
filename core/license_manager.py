@@ -168,3 +168,22 @@ def license_details() -> dict:
         else:
             tier = "Licencia clasica"
     return {"state": state, "days_left": days, "tier": tier}
+
+# ---------------- Helpers para trial (recordatorio + ofertas) ----------------
+def trial_anchor() -> int:
+    """Timestamp del primer arranque (via trial_tokens)."""
+    try:
+        from core import trial_tokens
+        return trial_tokens.first_launch()
+    except Exception:
+        return 0
+
+
+def trial_days_left() -> int:
+    from datetime import datetime
+    t0 = trial_anchor()
+    if not t0:
+        return TRIAL_DAYS
+    elapsed = (datetime.now().timestamp() - t0) / 86400.0
+    return max(0, TRIAL_DAYS - int(elapsed))
+
