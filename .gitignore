@@ -26,3 +26,8 @@ license.key
 
 # Output de instaladores viejos
 installer/output/
+
+*.log
+out_*.txt
+log_*.txt
+
