@@ -870,7 +870,8 @@ def _build_ui(self):
     for glyph, text, page in (
         ("home", "Inicio", 0), ("history", "Historial", 1),
         ("mic", "Voces", 2), ("heart", "Favoritos", 3),
-        ("folder", "Proyectos", 4), ("gear", "Ajustes", 5),
+        ("folder", "Proyectos", 4), ("sparkles", "Chat IA", 5),
+        ("gear", "Ajustes", 6),
     ):
         btn = NavButton(glyph, text)
         btn.clicked.connect(lambda _=False, pg=page: self._switch_page(pg))
@@ -1051,7 +1052,7 @@ def _build_ui(self):
     self.lang_combo.setItemIcon(3, QIcon(self._flag_pixmap("world")))
     self.lang_combo.currentIndexChanged.connect(
         lambda _i: self._on_lang_changed())
-    self.lang_combo.setCurrentIndex(3)
+    self.lang_combo.setCurrentIndex(0)
     self.lang_combo.setStyleSheet(combo_qss)
     self.lang_combo.setFixedHeight(38)
     self.lang_combo.setSizePolicy(
@@ -1247,8 +1248,259 @@ def _build_ui(self):
     pr4.addStretch()
     self.pages.addWidget(page4)
 
+    # ---------- PAGINA 5: CHAT IA ----------
     page5 = QWidget()
-    a5 = QVBoxLayout(page5)
+    page5.setStyleSheet("background: transparent;")
+    self._chat_page = page5
+    page5.installEventFilter(self)
+    p5 = QVBoxLayout(page5)
+    p5.setContentsMargins(24, 20, 24, 20)
+    p5.setSpacing(14)
+
+    self._chat_bg = QLabel(page5)
+    self._chat_bg.setStyleSheet("background: transparent;")
+    self._chat_bg.lower()
+
+    h5 = QHBoxLayout()
+    h5.setSpacing(12)
+    ico5 = QLabel()
+    ico5.setPixmap(make_icon("sparkles", "#bc8cff", 30))
+    h5.addWidget(ico5)
+    tcol = QVBoxLayout()
+    tcol.setSpacing(2)
+    t5 = QLabel("Chat IA")
+    t5.setStyleSheet(f"color: {TEXT}; font-size: 20px; font-weight: 800;")
+    tcol.addWidget(t5)
+    s5 = QLabel("Asistente inteligente de WillpoVoice")
+    s5.setStyleSheet(f"color: {MUTED}; font-size: 11px;")
+    tcol.addWidget(s5)
+    h5.addLayout(tcol)
+    h5.addStretch(1)
+    btn_config = QPushButton("  Configurar API Key")
+    btn_config.setIcon(QIcon(make_icon("key", "#7cb7ff", 14)))
+    btn_config.setCursor(Qt.CursorShape.PointingHandCursor)
+    btn_config.setStyleSheet(
+        "QPushButton { background: transparent; color: #cfe3ff;"
+        " border: 1px solid #2f4c79; border-radius: 16px;"
+        " padding: 7px 14px; font-size: 11.5px; font-weight: 600; }"
+        " QPushButton:hover { background: rgba(88,166,255,25); }")
+    btn_config.clicked.connect(self._configure_groq_key)
+    h5.addWidget(btn_config)
+    p5.addLayout(h5)
+
+    self._chat_banner = QFrame()
+    self._chat_banner.setObjectName("groqCard")
+    self._chat_banner.setStyleSheet(
+        "#groqCard { background: qlineargradient(x1:0,y1:0,x2:1,y2:1,"
+        " stop:0 rgba(18,24,56,235), stop:1 rgba(30,16,60,235));"
+        " border: 1px solid #3b4bd8; border-radius: 18px; }")
+    bv = QVBoxLayout(self._chat_banner)
+    bv.setContentsMargins(28, 26, 28, 26)
+    bv.setSpacing(18)
+
+    hdr = QHBoxLayout()
+    hdr.setSpacing(18)
+    orb = QLabel()
+    orb.setFixedSize(72, 72)
+    orb.setPixmap(make_icon("key", "#c4b5fd", 34))
+    orb.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    orb.setStyleSheet(
+        "background: rgba(124,92,255,40); border: 2px solid #7c5cff;"
+        " border-radius: 36px;")
+    hdr.addWidget(orb)
+    tcol = QVBoxLayout()
+    tcol.setSpacing(4)
+    t1 = QLabel("Configura tu API Key de Groq")
+    t1.setStyleSheet(
+        "color: #ffffff; font-size: 22px; font-weight: 800; font-style: italic;")
+    tcol.addWidget(t1)
+    t2 = QLabel("Conecta tu API Key para desbloquear todo el poder "
+                "del Chat IA de WillpoVoice.")
+    t2.setStyleSheet("color: #a8b3cf; font-size: 12px;")
+    tcol.addWidget(t2)
+    hdr.addLayout(tcol)
+    btn_del = QPushButton("  Eliminar API Key")
+    btn_del.setIcon(QIcon(make_icon("trash", "#ff7b72", 13)))
+    btn_del.setCursor(Qt.CursorShape.PointingHandCursor)
+    btn_del.setStyleSheet(
+        "QPushButton { background: transparent; color: #ff7b72;"
+        " border: 1px solid rgba(255,123,114,80); border-radius: 14px;"
+        " padding: 6px 12px; font-size: 10.5px; font-weight: 600; }"
+        " QPushButton:hover { background: rgba(255,123,114,25); }")
+    btn_del.clicked.connect(self._delete_groq_key)
+    hdr.addWidget(btn_del)
+    hdr.addStretch(1)
+    bv.addLayout(hdr)
+
+    cards = QHBoxLayout()
+    cards.setSpacing(16)
+    for glyph, ctitle, cdesc in [
+        ("shield", "100% Seguro",
+         "Tu clave se almacena de forma segura y encriptada."),
+        ("bolt", "Acceso Completo",
+         "Disfruta de respuestas mas rapidas y precisas con Groq."),
+    ]:
+        fr = QFrame()
+        fr.setObjectName("gcMini")
+        fr.setStyleSheet(
+            "#gcMini { background: rgba(13,18,40,160);"
+            " border: 1px solid #2a3364; border-radius: 12px; }")
+        fv = QHBoxLayout(fr)
+        fv.setContentsMargins(16, 14, 16, 14)
+        fv.setSpacing(12)
+        ic = QLabel()
+        ic.setFixedSize(44, 44)
+        ic.setPixmap(make_icon(glyph, "#ffffff", 20))
+        ic.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        ic.setStyleSheet(
+            "background: qlineargradient(x1:0,y1:0,x2:1,y2:1,"
+            " stop:0 #6d5df0, stop:1 #4527a0); border-radius: 22px;")
+        fv.addWidget(ic)
+        tx = QVBoxLayout()
+        tx.setSpacing(3)
+        a = QLabel(ctitle)
+        a.setStyleSheet("color: #ffffff; font-size: 13px; font-weight: 700;")
+        tx.addWidget(a)
+        b = QLabel(cdesc)
+        b.setStyleSheet("color: #93a0c2; font-size: 11px;")
+        b.setWordWrap(True)
+        tx.addWidget(b)
+        fv.addLayout(tx)
+        cards.addWidget(fr)
+    bv.addLayout(cards)
+
+    lbl = QLabel("Ingresa tu API Key")
+    lbl.setStyleSheet("color: #e6edf3; font-size: 12px; font-weight: 700;")
+    bv.addWidget(lbl)
+
+    key_row = QFrame()
+    key_row.setObjectName("gcInput")
+    key_row.setStyleSheet(
+        "#gcInput { background: rgba(10,14,32,200);"
+        " border: 1px solid #2a3364; border-radius: 10px; }")
+    kv = QHBoxLayout(key_row)
+    kv.setContentsMargins(12, 4, 8, 4)
+    kv.setSpacing(8)
+    kic = QLabel()
+    kic.setPixmap(make_icon("key", "#8b949e", 16))
+    kv.addWidget(kic)
+    self._groq_key_input = QLineEdit()
+    self._groq_key_input.setFixedHeight(40)
+    self._groq_key_input.setPlaceholderText(
+        "gsk_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
+    self._groq_key_input.setEchoMode(QLineEdit.EchoMode.Password)
+    self._groq_key_input.setStyleSheet(
+        "QLineEdit { background: transparent; border: none;"
+        " color: #e6edf3; font-size: 12.5px; }")
+    self._groq_key_input.returnPressed.connect(self._save_groq_key)
+    kv.addWidget(self._groq_key_input, 1)
+    self._key_eye = QPushButton()
+    self._key_eye.setFixedSize(32, 32)
+    self._key_eye.setCursor(Qt.CursorShape.PointingHandCursor)
+    self._key_eye.setStyleSheet(
+        "QPushButton { background: transparent; border: none; }")
+    self._key_eye.setIcon(QIcon(_chat_svg(_EYE_OFF, "#8b949e", 16)))
+    self._key_eye.clicked.connect(self._toggle_key_vis)
+    kv.addWidget(self._key_eye)
+    bv.addWidget(key_row)
+
+    hint = QLabel("Presiona Enter para conectar  ·  "
+                  "Obtén tu clave gratis en console.groq.com "
+                  "(sin tarjeta de crédito)")
+    hint.setStyleSheet("color: #93a0c2; font-size: 11px;")
+    bv.addWidget(hint)
+
+    bot = QHBoxLayout()
+    bot.setSpacing(12)
+    btn_get = QPushButton("  Obtener API Key gratis")
+    btn_get.setIcon(QIcon(make_icon("key", "#ffffff", 16)))
+    btn_get.setFixedHeight(44)
+    btn_get.setCursor(Qt.CursorShape.PointingHandCursor)
+    btn_get.setStyleSheet(
+        "QPushButton { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+        " stop:0 #6d5df0, stop:1 #2f6bff); color: white; border: none;"
+        " border-radius: 10px; padding: 0 22px; font-weight: 700;"
+        " font-size: 12.5px; }"
+        " QPushButton:hover { background: #7d6ffb; }")
+    btn_get.clicked.connect(
+        lambda: QDesktopServices.openUrl(QUrl("https://console.groq.com/keys")))
+    bot.addWidget(btn_get)
+    lock = QLabel()
+    lock.setPixmap(make_icon("lock", "#8d75ff", 14))
+    bot.addWidget(lock)
+    priv = QLabel("Tú tienes el control absoluto: "
+                  "tu clave nunca sale de tu equipo.")
+    priv.setStyleSheet("color: #93a0c2; font-size: 11px;")
+    bot.addWidget(priv)
+    bot.addStretch(1)
+    bv.addLayout(bot)
+
+    p5.addWidget(self._chat_banner)
+    from PySide6.QtCore import QSettings as _QSb
+    if _QSb("WillpoVoice", "WillpoVoice").value("groq_api_key", ""):
+        self._chat_banner.setVisible(False)
+
+    self._chat_scroll = QScrollArea()
+    self._chat_scroll.setWidgetResizable(True)
+    self._chat_scroll.setStyleSheet(
+        "QScrollArea { border: none; background: transparent; }")
+    chat_widget = QWidget()
+    chat_widget.setStyleSheet("background: transparent;")
+    self._chat_layout = QVBoxLayout(chat_widget)
+    self._chat_layout.setContentsMargins(0, 0, 0, 0)
+    self._chat_layout.setSpacing(14)
+    self._chat_layout.addStretch(1)
+    self._chat_scroll.setWidget(chat_widget)
+    self._chat_scroll.viewport().setStyleSheet("background: transparent;")
+    p5.addWidget(self._chat_scroll, 1)
+
+    bar = QFrame()
+    bar.setObjectName("chatBar")
+    bar.setStyleSheet(
+        "#chatBar { background: #0d1220; border: 1px solid #263050;"
+        " border-radius: 24px; }")
+    bh = QHBoxLayout(bar)
+    bh.setContentsMargins(8, 6, 8, 6)
+    bh.setSpacing(8)
+    orb = QLabel()
+    orb.setFixedSize(40, 40)
+    orb.setPixmap(make_icon("sparkles", "#bc8cff", 20))
+    orb.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    orb.setStyleSheet(
+        "border: 1.5px solid #6b3fa8; border-radius: 20px; background: transparent;")
+    bh.addWidget(orb)
+    self._chat_input = QLineEdit()
+    self._chat_input.setFixedHeight(40)
+    self._chat_input.setPlaceholderText("Escribe tu pregunta...")
+    self._chat_input.setStyleSheet(
+        "QLineEdit { background: transparent; border: none; color: #e6edf3;"
+        " font-size: 13px; padding: 0 6px; }")
+    self._chat_input.returnPressed.connect(self._send_chat_message)
+    bh.addWidget(self._chat_input, 1)
+    btn_send = QPushButton()
+    btn_send.setFixedSize(40, 40)
+    btn_send.setCursor(Qt.CursorShape.PointingHandCursor)
+    btn_send.setIcon(QIcon(_chat_svg(
+        "M2.01 21 23 12 2.01 3 2 10l15 2-15 2z", "#ffffff", 18)))
+    btn_send.setStyleSheet(
+        "QPushButton { background: qlineargradient(x1:0,y1:0,x2:1,y2:1,"
+        " stop:0 #8d75ff, stop:1 #6d5df0); border: none; border-radius: 12px; }"
+        " QPushButton:hover { background: #9d87ff; }")
+    btn_send.clicked.connect(self._send_chat_message)
+    bh.addWidget(btn_send)
+    p5.addWidget(bar)
+    self._chat_send_btn = btn_send
+    from PySide6.QtCore import QSettings as _QS
+    _has_key = bool(_QS("WillpoVoice", "WillpoVoice").value("groq_api_key", ""))
+    self._set_chat_locked(not _has_key)
+    self._add_chat_bubble(
+        "\u00a1Hola! \u00bfEn qu\u00e9 puedo ayudarte hoy?", is_user=False)
+    self._show_chat_chips()
+
+    self.pages.addWidget(page5)
+
+    page6 = QWidget()
+    a5 = QVBoxLayout(page6)
     a5.setContentsMargins(20, 16, 20, 16)
     at5 = QLabel("Ajustes")
     at5.setStyleSheet(f"color: {TEXT}; font-size: 20px; font-weight: 700;")
@@ -1266,7 +1518,7 @@ def _build_ui(self):
     a5.addLayout(row5)
     a5.addWidget(self.license_label)
     a5.addStretch()
-    self.pages.addWidget(page5)
+    self.pages.addWidget(page6)
 
     # ---------- PANEL DERECHO ----------
     self.right_panel = QFrame()
@@ -1448,6 +1700,8 @@ def _connect_signals(self):
 
 def _switch_page(self, index):
     self.pages.setCurrentIndex(index)
+    if index == 5:
+        self._layout_chat_bg()
     for i, (btn, _pg) in enumerate(self._nav):
         btn.set_active(i == index)
     self.right_panel.setVisible(index == 0)
@@ -1546,6 +1800,8 @@ def _lang_filtered(self, names):
 
 
 def _refill_combo(self):
+    if not hasattr(self, "voice_combo"):
+        return
     cur = self.voice_combo.currentData(Qt.ItemDataRole.UserRole)
     names = self._lang_filtered(getattr(self, "_voices", []))
     self.voice_combo.blockSignals(True)
@@ -2797,6 +3053,13 @@ MainWindow._current_voice = _current_voice
 
 
 def eventFilter(self, obj, event):
+    try:
+        from PySide6.QtCore import QEvent
+        if obj is getattr(self, "_chat_page", None) and \
+                event.type() == QEvent.Type.Resize:
+            self._layout_chat_bg()
+    except Exception:
+        pass
     from PySide6.QtCore import QEvent
     if obj is getattr(self, "voice_combo", None) and event.type() in (
             QEvent.Type.Resize, QEvent.Type.Polish, QEvent.Type.Show):
@@ -3128,6 +3391,14 @@ def _deferred_rebuilds(self):
 
 
 def _deferred_license(self):
+    try:
+        from PySide6.QtCore import QSettings
+        _s = QSettings("WillpoVoice", "WillpoVoice")
+        if str(_s.value("lic_dialog_ack", "0")) in ("1", "true", "True"):
+            return
+        _s.setValue("lic_dialog_ack", "1")
+    except Exception:
+        pass
     if not self._check_license():
         self.close()
 
@@ -4060,6 +4331,475 @@ def _open_plans(self):
     dlg = PlansDialog(self)
     dlg.exec()
 
+
+
+
+def _configure_groq_key(self):
+    self._switch_page(5)
+    vis = self._chat_banner.isVisible()
+    self._chat_banner.setVisible(not vis)
+    if not vis:
+        try:
+            self._groq_key_input.setFocus()
+        except Exception:
+            pass
+
+
+from PySide6.QtCore import QThread as _QThread, Signal as _ChatSignal
+
+
+class _ChatWorker(_QThread):
+    resultado = _ChatSignal(str)
+
+    def __init__(self, texto, historial=None, modo=None):
+        super().__init__()
+        self._texto = texto
+        self._historial = historial or []
+        self._modo = modo
+
+    def run(self):
+        try:
+            from core import brain
+            resp = brain.pensar(self._texto, self._historial, self._modo)
+        except Exception as exc:
+            resp = f"Error de conexion con la IA: {exc}"
+        self.resultado.emit(resp)
+
+
+def _send_chat_message(self):
+    import traceback
+    try:
+        text = self._chat_input.text().strip()
+        if not text:
+            return
+        from PySide6.QtCore import QSettings
+        settings = QSettings("WillpoVoice", "WillpoVoice")
+        api_key = settings.value("groq_api_key", "")
+        if not api_key:
+            self._chat_banner.setVisible(True)
+            return
+        from core import brain
+        brain.GROQ_API_KEY = api_key
+        self._add_chat_bubble(text, is_user=True)
+        self._chat_input.clear()
+        if not hasattr(self, "_chat_history"):
+            self._chat_history = []
+        hist = list(self._chat_history)
+        self._chat_history.append({"role": "user", "content": text})
+        thinking = self._add_chat_bubble(
+            "Pensando...", is_user=False, temp=True)
+        worker = _ChatWorker(text, hist, getattr(self, "_chat_mode", None))
+        self._chat_worker = worker
+        worker.resultado.connect(
+            lambda r: self._on_chat_response(r, thinking))
+        worker.start()
+    except Exception as exc:
+        traceback.print_exc()
+        try:
+            self._add_chat_bubble(f"Error al enviar: {exc}", is_user=False)
+        except Exception:
+            pass
+
+
+_EYE_ON = ("M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27"
+           "-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24"
+           "-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3"
+           " 3-1.34 3-3-1.34-3-3-3z")
+_EYE_OFF = ("M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51"
+            "-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25"
+            "-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46"
+            ".46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03"
+            "-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55"
+            " 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08"
+            "l1.55 1.55c-.67.37-1.43.58-2.2.58-2.76 0-5-2.24-5-5 0-.77.21-1.53"
+            ".58-2.2z")
+
+
+def _chat_svg(path_data, color, size):
+    from PySide6.QtSvg import QSvgRenderer
+    from PySide6.QtCore import QByteArray
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+           f'<path fill="{color}" d="{path_data}"/></svg>')
+    r = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+    pm = QPixmap(size, size)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    r.render(p)
+    p.end()
+    return pm
+
+
+class _Bubble(QWidget):
+    def __init__(self, text, is_user, ts, parent=None):
+        super().__init__(parent)
+        self.is_user = is_user
+        v = QVBoxLayout(self)
+        v.setContentsMargins(16, 12, 16, 8)
+        v.setSpacing(6)
+        lbl = QLabel(text)
+        lbl.setWordWrap(True)
+        lbl.setStyleSheet(
+            "color: #ffffff; font-size: 12.5px; background: transparent;")
+        v.addWidget(lbl)
+        trow = QHBoxLayout()
+        trow.setSpacing(4)
+        trow.addStretch(1)
+        tlabel = QLabel(ts + ("  \u2713\u2713" if is_user else ""))
+        tlabel.setStyleSheet(
+            "color: " + ("rgba(255,255,255,0.75)" if is_user else "#8b949e") +
+            "; font-size: 9.5px; background: transparent;")
+        trow.addWidget(tlabel)
+        v.addLayout(trow)
+
+    def paintEvent(self, ev):
+        from PySide6.QtGui import (QPainter, QPainterPath,
+                                   QLinearGradient, QColor)
+        from PySide6.QtCore import QRectF
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        r = QRectF(self.rect().adjusted(0, 0, 0, -7))
+        path = QPainterPath()
+        path.addRoundedRect(r, 14, 14)
+        if self.is_user:
+            x = r.right() - 22
+            path.moveTo(x, r.bottom() - 4)
+            path.lineTo(x + 16, r.bottom() - 6)
+            path.lineTo(x + 10, self.height() - 1)
+            path.closeSubpath()
+            g = QLinearGradient(0, 0, self.width(), self.height())
+            g.setColorAt(0, "#8d75ff")
+            g.setColorAt(1, "#6d5df0")
+            p.fillPath(path, g)
+        else:
+            x = r.left() + 8
+            path.moveTo(x, r.bottom() - 4)
+            path.lineTo(x + 14, r.bottom() - 6)
+            path.lineTo(x - 4, self.height() - 1)
+            path.closeSubpath()
+            p.fillPath(path, QColor("#10162a"))
+            p.setPen(QColor("#263050"))
+            p.drawPath(path)
+        p.end()
+
+
+def _add_chat_bubble(self, text, is_user, temp=False):
+    from PySide6.QtCore import QTime
+    ts = QTime.currentTime().toString("h:mm AP")
+    row = QHBoxLayout()
+    row.setContentsMargins(0, 0, 0, 0)
+    row.setSpacing(10)
+    if not is_user:
+        av = QLabel()
+        av.setFixedSize(40, 40)
+        av.setPixmap(self.windowIcon().pixmap(24, 24))
+        av.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        av.setStyleSheet(
+            "background: #0d1220; border: 2px solid #7c5cff;"
+            " border-radius: 20px;")
+        row.addWidget(av, 0, Qt.AlignmentFlag.AlignTop)
+    bub = _Bubble(text, is_user, ts)
+    bub.setMaximumWidth(560)
+    if is_user:
+        row.addStretch(1)
+        row.addWidget(bub)
+    else:
+        col = QVBoxLayout()
+        col.setContentsMargins(0, 0, 0, 0)
+        col.setSpacing(4)
+        col.addWidget(bub)
+        if not temp:
+            acts = QHBoxLayout()
+            acts.setSpacing(8)
+            acts.setContentsMargins(6, 0, 0, 0)
+            ghost = ("QPushButton { background: transparent;"
+                     " color: #8b949e; border: none; font-size: 10px;"
+                     " font-weight: 600; padding: 2px 6px;"
+                     " border-radius: 6px; }"
+                     " QPushButton:hover { color: #e6edf3;"
+                     " background: rgba(139,148,158,30); }")
+            b_copy = QPushButton("Copiar")
+            b_copy.setIcon(QIcon(make_icon("copy", "#8b949e", 12)))
+            b_copy.setStyleSheet(ghost)
+            b_copy.setCursor(Qt.CursorShape.PointingHandCursor)
+            b_copy.clicked.connect(
+                lambda _=False, txt=text: self._copy_chat_text(txt))
+            acts.addWidget(b_copy)
+            b_add = QPushButton("Agregar a conversi\u00f3n")
+            b_add.setIcon(QIcon(make_icon("paste", "#8b949e", 12)))
+            b_add.setStyleSheet(ghost)
+            b_add.setCursor(Qt.CursorShape.PointingHandCursor)
+            b_add.clicked.connect(
+                lambda _=False, txt=text: self._add_to_conversion(txt))
+            acts.addWidget(b_add)
+            acts.addStretch(1)
+            col.addLayout(acts)
+        row.addLayout(col)
+        row.addStretch(1)
+    wrap = QWidget()
+    wrap.setLayout(row)
+    wrap.setProperty("temp", temp)
+    self._chat_layout.insertWidget(self._chat_layout.count() - 1, wrap)
+    self._chat_scroll.verticalScrollBar().setValue(
+        self._chat_scroll.verticalScrollBar().maximum())
+    return wrap
+
+
+def _on_chat_response(self, response, temp_bubble):
+    if temp_bubble is not None:
+        try:
+            temp_bubble.setParent(None)
+            temp_bubble.deleteLater()
+        except Exception:
+            pass
+    self._add_chat_bubble(response, is_user=False)
+    if hasattr(self, "_chat_history"):
+        self._chat_history.append(
+            {"role": "assistant", "content": response})
+    ad = getattr(self, "adapter", None) or getattr(self, "sapi_adapter", None)
+    if ad is not None and len(response or "") <= 500:
+        try:
+            ad.speak(response)
+        except Exception as exc:
+            print(f"TTS fallo: {exc}")
+    self._show_chat_chips()
+
+
+def _layout_chat_bg(self):
+    try:
+        import sys as _sys
+        from PySide6.QtSvg import QSvgRenderer
+        base = Path(getattr(_sys, "_MEIPASS",
+                            Path(__file__).resolve().parents[1]))
+        if not getattr(self, "_chat_bg_pix", None):
+            pm = QPixmap(1400, 900)
+            pm.fill(Qt.GlobalColor.transparent)
+            pr = QPainter(pm)
+            pr.setOpacity(0.30)
+            sp_png = base / "assets" / "icons" / "chat_bg.png"
+            sp_svg = base / "assets" / "banner.svg"
+            if sp_png.exists():
+                src = QPixmap(str(sp_png))
+                scaled = src.scaled(
+                    1400, 900,
+                    Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                    Qt.TransformationMode.SmoothTransformation)
+                pr.drawPixmap((1400 - scaled.width()) // 2,
+                              (900 - scaled.height()) // 2, scaled)
+            elif sp_svg.exists():
+                QSvgRenderer(str(sp_svg)).render(pr)
+            pr.end()
+            self._chat_bg_pix = pm
+        w = self.pages.width() or 1200
+        h = self.pages.height() or 800
+        self._chat_bg.setGeometry(0, 0, w, h)
+        self._chat_bg.setPixmap(self._chat_bg_pix)
+        self._chat_bg.setScaledContents(True)
+    except Exception:
+        pass
+
+
+MainWindow._layout_chat_bg = _layout_chat_bg
+def _save_groq_key(self):
+    from PySide6.QtCore import QSettings
+    key = self._groq_key_input.text().strip()
+    if not key:
+        return
+    s = QSettings("WillpoVoice", "WillpoVoice")
+    s.setValue("groq_api_key", key)
+    self._chat_banner.setVisible(False)
+    self._set_chat_locked(False)
+    self._add_chat_bubble(
+        "API Key conectada. ¡Listo para chatear!", is_user=False)
+
+
+def _toggle_key_vis(self):
+    le = self._groq_key_input
+    if le.echoMode() == QLineEdit.EchoMode.Password:
+        le.setEchoMode(QLineEdit.EchoMode.Normal)
+        self._key_eye.setIcon(QIcon(_chat_svg(_EYE_ON, "#8b949e", 16)))
+    else:
+        le.setEchoMode(QLineEdit.EchoMode.Password)
+        self._key_eye.setIcon(QIcon(_chat_svg(_EYE_OFF, "#8b949e", 16)))
+
+
+def _set_chat_locked(self, locked):
+    try:
+        self._chat_input.setEnabled(not locked)
+        self._chat_send_btn.setEnabled(not locked)
+        self._chat_input.setPlaceholderText(
+            "Configura tu API Key para empezar..." if locked
+            else "Escribe tu pregunta...")
+        self._chat_send_btn.setStyleSheet(
+            "QPushButton { background: qlineargradient(x1:0,y1:0,x2:1,y2:1,"
+            " stop:0 #8d75ff, stop:1 #6d5df0); border: none;"
+            " border-radius: 12px; }"
+            " QPushButton:hover { background: #9d87ff; }"
+            " QPushButton:disabled { background: #232c47; }")
+        self._chat_input.setStyleSheet(
+            "QLineEdit { background: transparent; border: none;"
+            " color: #e6edf3; font-size: 13px; padding: 0 6px; }"
+            " QLineEdit:disabled { color: #55618a; }")
+    except Exception:
+        pass
+
+
+def _copy_chat_text(self, txt):
+    try:
+        from PySide6.QtWidgets import QApplication
+        QApplication.clipboard().setText(txt)
+        self.statusBar().showMessage(
+            "Respuesta copiada al portapapeles", 3000)
+    except Exception:
+        pass
+
+
+def _add_to_conversion(self, txt):
+    target = None
+    for name in ("text_edit", "text_input", "input_text",
+                 "text_area", "editor", "txt_input"):
+        w = getattr(self, name, None)
+        if w is not None and (hasattr(w, "setPlainText")
+                              or hasattr(w, "setText")):
+            target = w
+            break
+    if target is None:
+        from PySide6.QtWidgets import QTextEdit, QPlainTextEdit
+        for w in self.findChildren((QTextEdit, QPlainTextEdit)):
+            if w is not getattr(self, "_chat_input", None):
+                target = w
+                break
+    if target is not None:
+        try:
+            if hasattr(target, "setPlainText"):
+                cur = target.toPlainText()
+                target.setPlainText(
+                    (cur.rstrip() + "\n\n" + txt) if cur.strip() else txt)
+            else:
+                cur = target.text()
+                target.setText((cur + " " + txt) if cur.strip() else txt)
+            self._switch_page(0)
+            self.statusBar().showMessage(
+                "Texto agregado a la conversi\u00f3n", 3000)
+        except Exception:
+            pass
+
+
+def _on_chat_chip(self, label):
+    respuestas = {
+        "Crear un guion / historia":
+            "\u00a1Perfecto! \u00bfDe qu\u00e9 tratar\u00e1 tu historia o guion? "
+            "Dame los detalles exactos y lo crear\u00e9 \u2728",
+        "Analizar guion y mejorar":
+            "\u00a1Perfecto! Comp\u00e1rteme tu guion para mejorarlo.",
+        "Crear anuncios publicitarios":
+            "\u00a1Perfecto! Vamos a crear tu anuncio publicitario. "
+            "Necesitar\u00e9 lo siguiente:\n"
+            "- Nombre de tu negocio:\n"
+            "- De qu\u00e9 trata tu negocio:\n"
+            "- Qu\u00e9 producto vas a ofrecer:\n"
+            "- Precio",
+    }
+    self._add_chat_bubble(label, is_user=True)
+    self._chat_mode = label
+    try:
+        self._chat_chips_wrap.setParent(None)
+        self._chat_chips_wrap.deleteLater()
+    except Exception:
+        pass
+    resp = respuestas.get(label, "")
+    if not hasattr(self, "_chat_history"):
+        self._chat_history = []
+    self._chat_history.append({"role": "user", "content": label})
+    self._chat_history.append({"role": "assistant", "content": resp})
+    self._add_chat_bubble(resp, is_user=False)
+
+
+def _show_chat_chips(self):
+    try:
+        old = getattr(self, "_chat_chips_wrap", None)
+        if old is not None:
+            old.setParent(None)
+            old.deleteLater()
+    except Exception:
+        pass
+    chips = QHBoxLayout()
+    chips.setSpacing(10)
+    chips.setContentsMargins(52, 4, 8, 0)
+    chip_style = (
+        "QPushButton { background: transparent; color: #cfe3ff;"
+        " border: 1px solid #2f4c79; border-radius: 16px;"
+        " padding: 8px 14px; font-size: 11px; font-weight: 600; }"
+        " QPushButton:hover { background: rgba(88,166,255,25); }")
+    for glyph, label in [("doc", "Crear un guion / historia"),
+                         ("search", "Analizar guion y mejorar"),
+                         ("bolt", "Crear anuncios publicitarios")]:
+        ch = QPushButton("  " + label)
+        ch.setIcon(QIcon(make_icon(glyph, "#7cb7ff", 13)))
+        ch.setCursor(Qt.CursorShape.PointingHandCursor)
+        ch.setStyleSheet(chip_style)
+        ch.clicked.connect(
+            lambda _=False, lb=label: self._on_chat_chip(lb))
+        chips.addWidget(ch)
+    chips.addStretch(1)
+    x = QPushButton()
+    x.setFixedSize(26, 26)
+    x.setIcon(QIcon(make_icon("x", "#8b949e", 12)))
+    x.setCursor(Qt.CursorShape.PointingHandCursor)
+    x.setToolTip("Cerrar sugerencias")
+    x.setStyleSheet(
+        "QPushButton { background: transparent; border: none;"
+        " border-radius: 13px; }"
+        " QPushButton:hover { background: rgba(139,148,158,40); }")
+    x.clicked.connect(self._hide_chat_chips)
+    chips.addWidget(x)
+    wrap = QWidget()
+    wrap.setLayout(chips)
+    self._chat_chips_wrap = wrap
+    self._chat_layout.insertWidget(
+        self._chat_layout.count() - 1, wrap)
+    self._chat_scroll.verticalScrollBar().setValue(
+        self._chat_scroll.verticalScrollBar().maximum())
+
+
+def _hide_chat_chips(self):
+    try:
+        w = getattr(self, "_chat_chips_wrap", None)
+        if w is not None:
+            w.setParent(None)
+            w.deleteLater()
+        self._chat_chips_wrap = None
+    except Exception:
+        pass
+
+
+MainWindow._show_chat_chips = _show_chat_chips
+MainWindow._hide_chat_chips = _hide_chat_chips
+MainWindow._on_chat_chip = _on_chat_chip
+MainWindow._copy_chat_text = _copy_chat_text
+MainWindow._add_to_conversion = _add_to_conversion
+MainWindow._set_chat_locked = _set_chat_locked
+def _delete_groq_key(self):
+    from PySide6.QtCore import QSettings
+    s = QSettings("WillpoVoice", "WillpoVoice")
+    s.remove("groq_api_key")
+    try:
+        self._groq_key_input.clear()
+    except Exception:
+        pass
+    self._set_chat_locked(True)
+    self._chat_banner.setVisible(True)
+    self._add_chat_bubble(
+        "API Key eliminada. Configura una nueva cuando quieras.",
+        is_user=False)
+
+
+MainWindow._delete_groq_key = _delete_groq_key
+MainWindow._save_groq_key = _save_groq_key
+MainWindow._toggle_key_vis = _toggle_key_vis
+MainWindow._configure_groq_key = _configure_groq_key
+MainWindow._send_chat_message = _send_chat_message
+MainWindow._add_chat_bubble = _add_chat_bubble
+MainWindow._on_chat_response = _on_chat_response
 
 MainWindow._open_plans = _open_plans
 

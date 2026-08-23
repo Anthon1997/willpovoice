@@ -22,7 +22,7 @@ a = Analysis(
         "win32com", "win32com.client",
         "pythoncom", "pywintypes", "win32timezone",
     ],
-    hookspath=[],
+    hookspath=["hooks"],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[],
@@ -44,3 +44,4 @@ exe = EXE(
     console=False,
     icon="assets/icons/app.ico",
 )
+
