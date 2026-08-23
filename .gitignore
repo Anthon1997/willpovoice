@@ -31,3 +31,6 @@ installer/output/
 out_*.txt
 log_*.txt
 
+
+pyinstaller_debug.log
+*.spec.bak
