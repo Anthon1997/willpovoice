@@ -45,3 +45,4 @@ exe = EXE(
     icon="assets/icons/app.ico",
 )
 
+
