@@ -34,3 +34,12 @@ log_*.txt
 
 pyinstaller_debug.log
 *.spec.bak
+
+patch_*.py
+diag_*.py
+*.bak
+logo_new.*
+
+.env
+scripts/keygen*.py
+scripts/
