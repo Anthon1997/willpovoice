@@ -819,6 +819,32 @@ class ToolButton(QFrame):
 
 
 
+
+def _slider_qss():
+        return """
+        QSlider::groove:horizontal {
+            height: 6px;
+            background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
+                stop:0 #2a3552, stop:0.5 #4c3a8c, stop:1 #60a5fa);
+            border-radius: 3px;
+        }
+        QSlider::handle:horizontal {
+            background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
+                stop:0 #c4b5fd, stop:1 #7c5cff);
+            border: 2px solid #ffffff;
+            width: 16px;
+            height: 16px;
+            margin: -6px 0;
+            border-radius: 10px;
+        }
+        QSlider::handle:horizontal:hover {
+            background: #a78bfa;
+        }
+        QSlider::sub-page:horizontal {
+            background: transparent;
+        }
+        """
+
 def _build_ui(self):
     central = QWidget()
     central.setObjectName("centralMain")
@@ -959,6 +985,7 @@ def _build_ui(self):
     if cp.exists():
         cover.setPixmap(QPixmap(str(cp)))
     cover.setScaledContents(True)
+    cover.setMinimumSize(0, 0)
     cover.setStyleSheet("background: transparent; border-radius: 16px;")
     hg.addWidget(cover, 0, 0)
     titles = QWidget()
@@ -1111,7 +1138,6 @@ def _build_ui(self):
     self.adv_widget.setVisible(False)
     cl.addWidget(self.adv_widget)
     p0.addWidget(card)
-
     acts = QHBoxLayout()
     acts.setSpacing(12)
     self.speak_button = ActionButton("play", "Reproducir", "#123a8c", "#2563eb")
@@ -1286,6 +1312,16 @@ def _build_ui(self):
         " QPushButton:hover { background: rgba(88,166,255,25); }")
     btn_config.clicked.connect(self._configure_groq_key)
     h5.addWidget(btn_config)
+    btn_help = QPushButton("  ?")
+    btn_help.setIcon(QIcon(make_icon("help", "#7cb7ff", 14)))
+    btn_help.setCursor(Qt.CursorShape.PointingHandCursor)
+    btn_help.setStyleSheet(
+        "QPushButton { background: transparent; color: #cfe3ff;"
+        " border: 1px solid #2f4c79; border-radius: 16px;"
+        " padding: 7px 14px; font-size: 11.5px; font-weight: 600; }"
+        " QPushButton:hover { background: rgba(88,166,255,25); }")
+    btn_help.clicked.connect(self._show_chat_tutorial)
+    h5.addWidget(btn_help)
     p5.addLayout(h5)
 
     self._chat_banner = QFrame()
@@ -1310,7 +1346,7 @@ def _build_ui(self):
     hdr.addWidget(orb)
     tcol = QVBoxLayout()
     tcol.setSpacing(4)
-    t1 = QLabel("Configura tu API Key de Groq")
+    t1 = QLabel("Configura tu API Key")
     t1.setStyleSheet(
         "color: #ffffff; font-size: 22px; font-weight: 800; font-style: italic;")
     tcol.addWidget(t1)
@@ -1335,8 +1371,8 @@ def _build_ui(self):
     cards = QHBoxLayout()
     cards.setSpacing(16)
     for glyph, ctitle, cdesc in [
-        ("shield", "100% Seguro",
-         "Tu clave se almacena de forma segura y encriptada."),
+        ("shield", "Seguridad de tus datos",
+         "Las conversaciones que tienes son privadas."),
         ("bolt", "Acceso Completo",
          "Disfruta de respuestas mas rapidas y precisas con Groq."),
     ]:
@@ -1406,7 +1442,7 @@ def _build_ui(self):
 
     hint = QLabel("Presiona Enter para conectar  ·  "
                   "Obtén tu clave gratis en console.groq.com "
-                  "(sin tarjeta de crédito)")
+                  "")
     hint.setStyleSheet("color: #93a0c2; font-size: 11px;")
     bv.addWidget(hint)
 
@@ -1429,7 +1465,7 @@ def _build_ui(self):
     lock.setPixmap(make_icon("lock", "#8d75ff", 14))
     bot.addWidget(lock)
     priv = QLabel("Tú tienes el control absoluto: "
-                  "tu clave nunca sale de tu equipo.")
+                  "")
     priv.setStyleSheet("color: #93a0c2; font-size: 11px;")
     bot.addWidget(priv)
     bot.addStretch(1)
@@ -5187,6 +5223,75 @@ def _configure_groq_key(self):
 
 
 # TODO: def _send_chat_message faltante\nMainWindow._configure_groq_key = _configure_groq_key
+def _show_chat_tutorial(self):
+    """Mini tutorial en GIF, ventana compacta con piel de la app."""
+    import sys
+    from PySide6.QtGui import QMovie, QImageReader
+    from PySide6.QtCore import QSize
+    base = Path(getattr(sys, "_MEIPASS",
+                        Path(__file__).resolve().parents[1]))
+    gif = base / "assets" / "tutorial.gif"
+    if not gif.exists():
+        self.statusBar().showMessage(
+            "Tutorial no disponible (assets/tutorial.gif)", 3000)
+        return
+    d = QDialog(self)
+    d.setWindowTitle("WillpoVoice - Mini tutorial")
+    d.setWindowIcon(self.windowIcon())
+    d.setStyleSheet("QDialog { background: #0a0c14; }")
+    d.setFixedWidth(520)
+    v = QVBoxLayout(d)
+    v.setContentsMargins(20, 16, 20, 16)
+    v.setSpacing(10)
+
+    tt = QLabel("Mini tutorial")
+    tt.setStyleSheet(
+        "color: #ffffff; font-size: 16px; font-weight: 800;")
+    tt.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    v.addWidget(tt)
+    st = QLabel("Aprende el Chat IA en segundos")
+    st.setStyleSheet("color: #8b949e; font-size: 10.5px;")
+    st.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    v.addWidget(st)
+
+    lbl = QLabel()
+    lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    lbl.setStyleSheet(
+        "background: rgba(12,16,28,120);"
+        " border: 1.5px solid rgba(139,117,255,80);"
+        " border-radius: 16px;")
+    fs = QImageReader(str(gif)).size()
+    tw, th = 460, 300
+    if fs.width() > 0 and fs.height() > 0:
+        th = int(fs.height() * tw / fs.width())
+        if th > 420:
+            th = 420
+            tw = int(fs.width() * th / fs.height())
+    movie = QMovie(str(gif))
+    movie.setScaledSize(QSize(tw, th))
+    movie.start()
+    lbl.setMovie(movie)
+    lbl.setFixedSize(tw + 24, th + 24)
+    v.addWidget(lbl, 0, Qt.AlignmentFlag.AlignHCenter)
+
+    b = QPushButton("Entendido")
+    b.setFixedHeight(36)
+    b.setCursor(Qt.CursorShape.PointingHandCursor)
+    b.setStyleSheet(
+        "QPushButton { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+        " stop:0 #8d5cf0, stop:1 #6d2fd0); color: white; border: none;"
+        " border-radius: 12px; font-weight: 800; font-size: 12px; }"
+        " QPushButton:hover { background: #9d70ff; }")
+    b.clicked.connect(d.accept)
+    v.addWidget(b)
+
+    d.adjustSize()
+    self._center_on_screen(d)
+    d.exec()
+
+
+MainWindow._show_chat_tutorial = _show_chat_tutorial
+
 def _send_chat_message(self):
     text = self._chat_input.text().strip()
     if not text:
