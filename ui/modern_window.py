@@ -757,7 +757,7 @@ class AdvButton(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFixedHeight(40)
+        self.setFixedHeight(38)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(12, 0, 12, 0)
         lay.setSpacing(8)
@@ -793,6 +793,51 @@ class AdvButton(QFrame):
         self.chevron = nuevo
 
 
+class AdvCard(QFrame):
+    clicked = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setObjectName("advCard")
+        self.setFixedHeight(44)
+        self.setStyleSheet(
+            f"AdvCard {{ background: {CARD}; border: 1px solid {BORDER};"
+            " border-radius: 14px; }"
+            " AdvCard:hover { border-color: #34406b; }")
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(12, 8, 12, 8)
+        lay.setSpacing(12)
+        badge = QFrame()
+        badge.setFixedSize(30, 30)
+        badge.setStyleSheet("QFrame { background: rgba(139,92,246,45); border-radius: 15px; }")
+        bl = QVBoxLayout(badge)
+        bl.setContentsMargins(0, 0, 0, 0)
+        bic = QLabel()
+        bic.setPixmap(make_icon("gear", "#a78bfa", 14))
+        bic.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        bl.addWidget(bic)
+        lay.addWidget(badge)
+        col = QVBoxLayout()
+        col.setSpacing(2)
+        self.title_lbl = QLabel("Opciones avanzadas")
+        self.title_lbl.setStyleSheet(f"color: {TEXT}; font-size: 12px; font-weight: 700; background: transparent;")
+        col.addWidget(self.title_lbl)
+        lay.addLayout(col, 1)
+        self.chev = QLabel()
+        self.chev.setPixmap(make_icon("chevron-down", MUTED, 14))
+        lay.addWidget(self.chev)
+
+    def mouseReleaseEvent(self, event):
+        self.clicked.emit()
+
+    def setText(self, s):
+        self.set_expanded(s.startswith(("<", "\uff1c")))
+
+    def set_expanded(self, on):
+        self.chev.setPixmap(make_icon("chevron-up" if on else "chevron-down", MUTED, 16))
+
+
 class ToolButton(QFrame):
     clicked = Signal()
 
@@ -813,6 +858,7 @@ class ToolButton(QFrame):
             "ToolButton { background: transparent; border: 1px solid"
             f" transparent; border-radius: 8px; }} ToolButton:hover {{ background: {CARD2}; }}"
         )
+        self.setMinimumWidth(0)
 
     def mouseReleaseEvent(self, event):
         self.clicked.emit()
@@ -969,7 +1015,8 @@ def _build_ui(self):
     p0.setSpacing(14)
 
     header = QFrame()
-    header.setFixedHeight(190)
+    header.setFixedHeight(180)
+    header.setMinimumWidth(0)
     header.setObjectName("headerCard")
     header.setStyleSheet(f"QFrame#headerCard {{ background: {CARD}; border-radius: 16px; }}")
     hg = QGridLayout(header)
@@ -985,7 +1032,9 @@ def _build_ui(self):
     if cp.exists():
         cover.setPixmap(QPixmap(str(cp)))
     cover.setScaledContents(True)
-    cover.setMinimumSize(0, 0)
+    cover.setMinimumSize(1, 1)
+    cover.setSizePolicy(
+        QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
     cover.setStyleSheet("background: transparent; border-radius: 16px;")
     hg.addWidget(cover, 0, 0)
     titles = QWidget()
@@ -1009,68 +1058,122 @@ def _build_ui(self):
     self.stat_conv = StatsCard("wave", TEAL, "Conversiones hoy",
                                str(self.settings.get("conv_today", 0)))
     for s in (self.stat_voices, self.stat_langs, self.stat_conv):
+        s.setMinimumWidth(0)
+        s.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         stats.addWidget(s)
     p0.addLayout(stats)
 
     card = QFrame()
     card.setObjectName("convCard")
+    card.setMinimumWidth(0)
     card.setStyleSheet(f"QFrame#convCard {{ background: {CARD}; border: 1px solid {BORDER}; border-radius: 16px; }}")
     cl = QVBoxLayout(card)
     cl.setContentsMargins(18, 14, 18, 16)
-    cl.setSpacing(12)
+    cl.setSpacing(10)
+
+    # ---------- fila superior: tabs + limpiar/pegar ----------
     top = QHBoxLayout()
+    top.setSpacing(10)
     self.tab_text = TabButton("Texto manual")
     self.tab_file = TabButton("Importar archivo")
     self.tab_text.set_active(True)
-    self.tab_text.setIcon(QIcon(make_icon("text", BLUE, 14)))
+    self.tab_text.setIcon(QIcon(make_icon("text", "#a78bfa", 14)))
     self.tab_text.setIconSize(QSize(14, 14))
     self.tab_file.setIcon(QIcon(make_icon("doc", MUTED, 14)))
     self.tab_file.setIconSize(QSize(14, 14))
     self.tab_file.clicked.connect(self._open_document_dialog)
-    top.addWidget(self.tab_text)
-    top.addWidget(self.tab_file)
+    _uw = QFrame()
+    _uwl = QVBoxLayout(_uw)
+    _uwl.setContentsMargins(0, 0, 0, 0)
+    _uwl.setSpacing(4)
+    _uwl.addWidget(self.tab_text)
+    _tab_under = QFrame()
+    _tab_under.setFixedHeight(3)
+    _tab_under.setVisible(False)
+    _uwl.addWidget(_tab_under)
+    top.addWidget(_uw)
+    _uw2 = QFrame()
+    _uw2l = QVBoxLayout(_uw2)
+    _uw2l.setContentsMargins(0, 0, 0, 0)
+    _uw2l.setSpacing(4)
+    _uw2l.addWidget(self.tab_file)
+    _spu = QFrame()
+    _spu.setFixedHeight(3)
+    _spu.setStyleSheet("background: transparent;")
+    _uw2l.addWidget(_spu)
+    top.addWidget(_uw2)
     top.addStretch()
     self.btn_clear = ToolButton("trash", "Limpiar")
     self.btn_paste = ToolButton("paste", "Pegar")
+    self.btn_clear.icon.setPixmap(make_icon("trash", "#e879f9", 13))
+    self.btn_paste.icon.setPixmap(make_icon("paste", "#60a5fa", 13))
+    for _tb in (self.btn_clear, self.btn_paste):
+        _tb.label.setStyleSheet(f"color: {TEXT}; font-size: 12px; background: transparent;")
+        _tb.setStyleSheet(f"ToolButton {{ background: {CARD2}; border: 1px solid {BORDER}; border-radius: 10px; }} ToolButton:hover {{ border-color: #34406b; }}")
     top.addWidget(self.btn_clear)
     top.addWidget(self.btn_paste)
     cl.addLayout(top)
 
+    # ---------- caja de texto con borde neon degradado ----------
+    self._text_card = QFrame()
+    self._text_card.setObjectName("textCard")
+    self._text_card.setStyleSheet("QFrame#textCard { background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #7c5cff, stop:0.5 #4c6ef5, stop:1 #38bdf8); border-radius: 14px; }")
+    _tcl = QVBoxLayout(self._text_card)
+    _tcl.setContentsMargins(1, 1, 1, 1)
+    _tin = QFrame()
+    _tin.setObjectName("textInner")
+    _tin.setStyleSheet("QFrame#textInner { background: #0d1424; border-radius: 13px; }")
+    _tiv = QVBoxLayout(_tin)
+    _tiv.setContentsMargins(12, 8, 14, 4)
+    _tiv.setSpacing(2)
     self.text_edit = QPlainTextEdit()
     self.text_edit.setPlaceholderText("Escribe aquí el texto que quieres convertir a voz...")
-    self.text_edit.setFixedHeight(120)
-    self.text_edit.setMinimumWidth(150)
-    self.text_edit.setStyleSheet(
-        f"QPlainTextEdit {{ background: #0d1424; color: {TEXT};"
-        f" border: 1px solid {BORDER}; border-radius: 12px; padding: 10px;"
-        " font-size: 14px; selection-background-color: #3b82f6; }"
-    )
-    cl.addWidget(self.text_edit)
+    self.text_edit.setFixedHeight(110)
+    self.text_edit.setMinimumWidth(0)
+    self.text_edit.setStyleSheet(f"QPlainTextEdit {{ background: transparent; color: {TEXT}; border: none; padding: 2px 0; font-size: 13px; selection-background-color: #3b82f6; }}")
+    _tiv.addWidget(self.text_edit)
+    _crow = QHBoxLayout()
+    _crow.addStretch()
     self.counter_label = QLabel("0 / 5000")
-    self.counter_label.setAlignment(Qt.AlignmentFlag.AlignRight)
-    self.counter_label.setStyleSheet(
-        f"color: {MUTED}; font-size: 10px; background: transparent;"
-    )
-    cl.addWidget(self.counter_label)
+    self.counter_label.setStyleSheet(f"color: {MUTED}; font-size: 10px; background: transparent;")
+    _crow.addWidget(self.counter_label)
+    _tiv.addLayout(_crow)
+    _tcl.addWidget(_tin)
+    cl.addWidget(self._text_card)
 
+    # ---------- tarjetas Idioma / Voz seleccionada ----------
     sel = QHBoxLayout()
-    sel.setSpacing(12)
+    sel.setSpacing(14)
+    sel.setContentsMargins(0, 2, 0, 0)
     combo_qss = (
-        f"QComboBox {{ background: #0d1424; color: {TEXT}; border: 1px solid"
-        f" {BORDER}; border-radius: 10px; padding: 7px 12px;"
-        " font-size: 13px; }"
+        f"QComboBox {{ background: #0a0d1f; color: {TEXT}; border: 1px solid"
+        " #272c4c; border-radius: 9px; padding: 6px 12px;"
+        " font-size: 12.5px; }"
         " QComboBox:hover { border: 1px solid #34406b; }"
-        " QComboBox::drop-down { border: none; width: 30px; }"
+        " QComboBox::drop-down { border: none; width: 28px; }"
         f" QComboBox QAbstractItemView {{ background: #10162a; color: {TEXT};"
         f" border: 1px solid {BORDER}; selection-background-color: {CARD2};"
         " padding: 6px; }"
     )
-    col1 = QVBoxLayout()
-    col1.setSpacing(4)
+    _lc = QFrame()
+    _lc.setObjectName("langCard")
+    _lc.setFixedHeight(76)
+    _lc.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+    _lc.setStyleSheet("QFrame#langCard { background: #10122b; border: 1px solid rgba(139,92,246,85); border-radius: 12px; }")
+    _lcv = QVBoxLayout(_lc)
+    _lcv.setContentsMargins(12, 8, 12, 8)
+    _lcv.setSpacing(6)
+    _lh = QHBoxLayout()
+    _lh.setSpacing(7)
+    _lic2 = QLabel()
+    _lic2.setPixmap(make_icon("globe", "#a78bfa", 14))
+    _lh.addWidget(_lic2)
     l1 = QLabel("Idioma")
-    l1.setStyleSheet(
-        f"color: {MUTED}; font-size: 11px; background: transparent;"
-    )
+    l1.setStyleSheet(f"color: {TEXT}; font-size: 11.5px; font-weight: 600; background: transparent;")
+    _lh.addWidget(l1)
+    _lh.addStretch()
+    _lcv.addLayout(_lh)
     self.lang_combo = QComboBox()
     self.lang_combo.addItems(["Multilingüe Premium", "Español (España)", "Inglés (EEUU)", "Todos"])
     self.lang_combo.setItemIcon(0, QIcon(make_icon("crown", "#f5b544", 16)))
@@ -1081,22 +1184,33 @@ def _build_ui(self):
         lambda _i: self._on_lang_changed())
     self.lang_combo.setCurrentIndex(0)
     self.lang_combo.setStyleSheet(combo_qss)
-    self.lang_combo.setFixedHeight(38)
+    self.lang_combo.setFixedHeight(36)
     self.lang_combo.setSizePolicy(
         QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
     self.lang_combo.setMinimumWidth(0)
-    col1.addWidget(l1)
-    col1.addWidget(self.lang_combo)
-    sel.addLayout(col1, 1)
-    col2 = QVBoxLayout()
-    col2.setSpacing(4)
+    _lcv.addWidget(self.lang_combo)
+    sel.addWidget(_lc, 1)
+    _vc = QFrame()
+    _vc.setObjectName("voiceCard")
+    _vc.setFixedHeight(76)
+    _vc.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+    _vc.setStyleSheet("QFrame#voiceCard { background: #10122b; border: 1px solid rgba(139,92,246,85); border-radius: 12px; }")
+    _vcv = QVBoxLayout(_vc)
+    _vcv.setContentsMargins(12, 8, 12, 8)
+    _vcv.setSpacing(6)
+    _vh2 = QHBoxLayout()
+    _vh2.setSpacing(7)
+    _vic3 = QLabel()
+    _vic3.setPixmap(make_icon("wave", "#60a5fa", 14))
+    _vh2.addWidget(_vic3)
     l2 = QLabel("Voz seleccionada")
-    l2.setStyleSheet(
-        f"color: {MUTED}; font-size: 11px; background: transparent;"
-    )
+    l2.setStyleSheet(f"color: {TEXT}; font-size: 11.5px; font-weight: 600; background: transparent;")
+    _vh2.addWidget(l2)
+    _vh2.addStretch()
+    _vcv.addLayout(_vh2)
     self.voice_combo = QComboBox()
     self.voice_combo.setStyleSheet(
-        combo_qss + " QComboBox { padding: 7px 84px 7px 12px; }"
+        combo_qss + " QComboBox { padding: 6px 80px 6px 12px; }"
     )
     self.pro_badge = QLabel("Pro", self.voice_combo)
     self.pro_badge.setStyleSheet(
@@ -1105,36 +1219,90 @@ def _build_ui(self):
     )
     self.pro_badge.setAttribute(
         Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-    self.voice_combo.setFixedHeight(38)
+    self.voice_combo.setFixedHeight(36)
     self.voice_combo.setSizePolicy(
         QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
     self.voice_combo.setMinimumWidth(0)
     self.voice_combo.installEventFilter(self)
     for _cb in (self.lang_combo, self.voice_combo):
-        _cb.setFixedHeight(38)
-        _cb.setIconSize(QSize(18, 14))
+        _cb.setFixedHeight(36)
+        _cb.setIconSize(QSize(16, 13))
         _cb.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-    col2.addWidget(l2)
-    col2.addWidget(self.voice_combo)
-    sel.addLayout(col2, 1)
+    _vcv.addWidget(self.voice_combo)
+    sel.addWidget(_vc, 1)
     cl.addLayout(sel)
 
-    self.adv_button = AdvButton()
+    # ---------- Opciones avanzadas (tarjeta colapsable) ----------
+    self.adv_button = AdvCard()
     cl.addWidget(self.adv_button)
     self.adv_widget = QWidget()
+    self.adv_widget.setStyleSheet("background: transparent;")
     al = QHBoxLayout(self.adv_widget)
-    al.setContentsMargins(0, 4, 0, 4)
-    al.addWidget(QLabel("Velocidad"))
+    al.setContentsMargins(2, 6, 2, 4)
+    al.setSpacing(28)
+    _mock_slider = """
+    QSlider { background: transparent; }
+    QSlider::groove:horizontal { height: 6px; border-radius: 3px;
+        background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #7c5cff, stop:1 #38bdf8); }
+    QSlider::sub-page:horizontal { background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #7c5cff, stop:1 #38bdf8); border-radius: 3px; }
+    QSlider::add-page:horizontal { background: #232f4b; border-radius: 3px; }
+    QSlider::handle:horizontal { width: 14px; height: 14px; margin: -5px 0;
+        border-radius: 7px; background: #ffffff; border: 3px solid rgba(124,92,255,160); }
+    """
+    _vcol = QVBoxLayout()
+    _vcol.setSpacing(6)
+    _vhead = QHBoxLayout()
+    _vhead.setSpacing(8)
+    _vico = QLabel()
+    _vico.setPixmap(make_icon("bolt", "#a78bfa", 15))
+    _vhead.addWidget(_vico)
+    _vtitle = QLabel("Velocidad")
+    _vtitle.setStyleSheet(f"color: {TEXT}; font-size: 13px; font-weight: 600; background: transparent;")
+    _vhead.addWidget(_vtitle)
+    _vhead.addStretch()
+    _vcol.addLayout(_vhead)
     self.rate_slider = QSlider(Qt.Orientation.Horizontal)
     self.rate_slider.setRange(-10, 10)
-    al.addWidget(self.rate_slider, 1)
-    al.addSpacing(14)
-    al.addWidget(QLabel("Volumen"))
+    self.rate_slider.setStyleSheet(_mock_slider)
+    _vcol.addWidget(self.rate_slider)
+    _vsub = QHBoxLayout()
+    _va = QLabel("Más lenta")
+    _va.setStyleSheet(f"color: {MUTED}; font-size: 10.5px; background: transparent;")
+    _vb = QLabel("Más rápida")
+    _vb.setStyleSheet(f"color: {MUTED}; font-size: 10.5px; background: transparent;")
+    _vsub.addWidget(_va)
+    _vsub.addStretch()
+    _vsub.addWidget(_vb)
+    _vcol.addLayout(_vsub)
+    al.addLayout(_vcol, 1)
+    _ocol = QVBoxLayout()
+    _ocol.setSpacing(6)
+    _ohead = QHBoxLayout()
+    _ohead.setSpacing(8)
+    _oico = QLabel()
+    _oico.setPixmap(make_icon("volume", "#a78bfa", 15))
+    _ohead.addWidget(_oico)
+    _otitle = QLabel("Volumen")
+    _otitle.setStyleSheet(f"color: {TEXT}; font-size: 13px; font-weight: 600; background: transparent;")
+    _ohead.addWidget(_otitle)
+    _ohead.addStretch()
+    _ocol.addLayout(_ohead)
     self.volume_slider = QSlider(Qt.Orientation.Horizontal)
     self.volume_slider.setRange(0, 100)
     self.volume_slider.setValue(100)
-    al.addWidget(self.volume_slider, 1)
+    self.volume_slider.setStyleSheet(_mock_slider)
+    _ocol.addWidget(self.volume_slider)
+    _osub = QHBoxLayout()
+    _oa = QLabel("Bajo")
+    _oa.setStyleSheet(f"color: {MUTED}; font-size: 10.5px; background: transparent;")
+    _ob = QLabel("Alto")
+    _ob.setStyleSheet(f"color: {MUTED}; font-size: 10.5px; background: transparent;")
+    _osub.addWidget(_oa)
+    _osub.addStretch()
+    _osub.addWidget(_ob)
+    _ocol.addLayout(_osub)
+    al.addLayout(_ocol, 1)
     self.adv_widget.setVisible(False)
     cl.addWidget(self.adv_widget)
     p0.addWidget(card)
@@ -1153,6 +1321,9 @@ def _build_ui(self):
     acts.addWidget(self.copy_button)
     acts.addWidget(self.open_button)
     acts.addWidget(self.theme_button)
+
+    for _ab in (self.speak_button, self.stop_button, self.export_button):
+        _ab.setMinimumWidth(0)
     p0.addLayout(acts)
     self._add_neon(self.speak_button, BLUE)
     self._add_neon(self.stop_button, MAGENTA)
@@ -1160,6 +1331,7 @@ def _build_ui(self):
 
     player = QFrame()
     player.setFixedHeight(64)
+    player.setMinimumWidth(0)
     player.setObjectName("playerBar")
     player.setStyleSheet(f"QFrame#playerBar {{ background: {CARD}; border: 1px solid {BORDER}; border-radius: 14px; }}")
     yl = QHBoxLayout(player)
@@ -1421,7 +1593,7 @@ def _build_ui(self):
     kic.setPixmap(make_icon("key", "#8b949e", 16))
     kv.addWidget(kic)
     self._groq_key_input = QLineEdit()
-    self._groq_key_input.setFixedHeight(40)
+    self._groq_key_input.setFixedHeight(38)
     self._groq_key_input.setPlaceholderText(
         "gsk_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
     self._groq_key_input.setEchoMode(QLineEdit.EchoMode.Password)
@@ -1506,7 +1678,7 @@ def _build_ui(self):
         "border: 1.5px solid #6b3fa8; border-radius: 20px; background: transparent;")
     bh.addWidget(orb)
     self._chat_input = QLineEdit()
-    self._chat_input.setFixedHeight(40)
+    self._chat_input.setFixedHeight(38)
     self._chat_input.setPlaceholderText("Escribe tu pregunta...")
     self._chat_input.setStyleSheet(
         "QLineEdit { background: transparent; border: none; color: #e6edf3;"
@@ -4040,7 +4212,7 @@ def _show_no_tokens(self):
         " QPushButton:hover { background: #20ba5a; }")
     v.addWidget(b_wa)
     b_dc = QPushButton("  Comprar por Discord  ")
-    b_dc.setFixedHeight(40)
+    b_dc.setFixedHeight(38)
     b_dc.setCursor(Qt.CursorShape.PointingHandCursor)
     b_dc.setIcon(QIcon(_svg(IC_DC, "#ffffff", 20)))
     b_dc.setIconSize(QSize(20, 20))
