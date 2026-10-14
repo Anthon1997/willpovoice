@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re as _re_tts
 from typing import List, Optional
 
 from adapters.naturalvoice_adapter import NaturalVoiceAdapter
@@ -97,6 +98,9 @@ class TTSEngine:
             desc = self.adapter.sapi.Voice.GetDescription()
         except Exception:
             desc = ""
+        text = (text or "").replace("*", "").replace("#", "")
+        text = _re_tts.sub(r"\b[Ee]lige\b", "elije", text)
+        text = _re_tts.sub(r"([.!?])\s+elije\b", ", elije", text)
         text = normalize_for_tts(
             text, guard=needs_homograph_guard(desc))
         self.adapter.speak(text, asynchronous=True)

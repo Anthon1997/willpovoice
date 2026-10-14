@@ -43,20 +43,19 @@ class NaturalVoiceAdapter(SAPIAdapter):
         """
         normalized_description = description.lower()
 
-        return any(
-            keyword in normalized_description
-            for keyword in self.natural_keywords
-        )
+        return any(keyword in normalized_description for keyword in self.natural_keywords)
 
     def find_natural_voices(self) -> List[Dict[str, str]]:
         """
         Devuelve voces que coinciden con NaturalVoice.
         """
-        return [
-            voice
-            for voice in self.list_voices()
-            if self.is_natural_voice(voice["description"])
-        ]
+        try:
+            voices = self.list_voices()
+        except Exception as e:
+            self.logger.error(f"Error al listar voces: {e}")
+            return []
+
+        return [voice for voice in voices if self.is_natural_voice(voice["description"])]
 
     def select_first_natural_voice(self) -> bool:
         """
@@ -68,4 +67,8 @@ class NaturalVoiceAdapter(SAPIAdapter):
             self.logger.info("No se encontraron voces NaturalVoice.")
             return False
 
-        return self.set_voice(voices[0]["description"])
+        try:
+            return self.set_voice(voices[0]["description"])
+        except Exception as e:
+            self.logger.error(f"Error al seleccionar la voz: {e}")
+            return False

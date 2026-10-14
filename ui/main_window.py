@@ -746,7 +746,7 @@ class TrialActivatedDialog(QDialog):
         super().__init__(parent)
         self.setModal(True)
         self.setFixedWidth(480)
-        self.setWindowTitle("Prueba gratuita")
+        self.setWindowTitle("WillpoVoice Estándar")
         self.setStyleSheet(
             f"TrialActivatedDialog {{ background: {BG}; }}")
         root = QVBoxLayout(self)
@@ -754,7 +754,7 @@ class TrialActivatedDialog(QDialog):
         root.setSpacing(12)
         root.addWidget(_StopwatchWidget(190), 0,
                        Qt.AlignmentFlag.AlignCenter)
-        tt = QLabel("¡Prueba gratuita activada!")
+        tt = QLabel("¡Plan Estándar activado!")
         tt.setStyleSheet(
             f"color: {TEXT}; font-size: 20px; font-weight: 800;")
         tt.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -778,17 +778,16 @@ class TrialActivatedDialog(QDialog):
         from datetime import datetime, timedelta
         fin = datetime.now() + timedelta(days=max(0, days_left))
         lb = QLabel(
-            f'<span style="color:{GOLD}; font-weight:700;">'
-            f'{days_left} dias</span>  ·  hasta el '
-            f'{fin.strftime("%d/%m/%Y")}')
+            '<span style="color:#f0a020; font-weight:700;">'
+            'Plan Estándar activo</span>  ·  sin vencimiento')
         lb.setStyleSheet(f"color: {TEXT}; font-size: 12px;")
         cl.addWidget(lb)
         coin = QLabel()
         coin.setPixmap(_lic_svg("coins", GOLD, 14))
         cl.addWidget(coin)
         tk = QLabel(
-            f'<span style="color:{GOLD}; font-weight:700;">'
-            f'{trial_tokens.TRIAL_TOKENS:,} tokens</span>')
+            '<span style="color:#f0a020; font-weight:700;">'
+            '5,000 caracteres por conversión</span>')
         tk.setStyleSheet(f"color: {TEXT}; font-size: 12px;")
         cl.addWidget(tk)
         cl.addStretch()
@@ -1022,8 +1021,7 @@ class LicenseDialog(QDialog):
         trial_card = QFrame()
         trial_card.setObjectName("trialcard")
         self._trial_card = trial_card
-        trial_card.setCursor(Qt.CursorShape.PointingHandCursor)
-        trial_card.installEventFilter(self)
+        # trial_card DESACTIVADO: sin cursor, sin event filter
         trial_card.setFixedHeight(46)
         trial_card.setStyleSheet(
             f"#trialcard {{ background: {CARD}; border: 1px solid {BORDER};"
@@ -1048,6 +1046,7 @@ class LicenseDialog(QDialog):
         tl.addWidget(trl)
         tl.addStretch()
         rv.addWidget(trial_card)
+        trial_card.hide()
         rv.addSpacing(2)
 
         kl = QLabel("Ingresa tu clave de licencia:")
@@ -1115,20 +1114,8 @@ class LicenseDialog(QDialog):
         )
         buy.clicked.connect(self.open_whatsapp)
         row2.addWidget(buy, 1)
-        if days_left >= 0:
-            trial_btn = QPushButton("Continuar en prueba")
-            trial_btn.setFixedHeight(42)
-            trial_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            trial_btn.setIcon(QIcon(_lic_svg("flask", "#c9d1d9", 16)))
-            trial_btn.setIconSize(QSize(16, 16))
-            trial_btn.setStyleSheet(
-                f"QPushButton {{ background: transparent; color: #c9d1d9;"
-                f" border: 1px solid {BORDER}; border-radius: 10px;"
-                " font-size: 12px; font-weight: 600; }"
-                f" QPushButton:hover {{ border-color: {MUTED}; }}"
-            )
-            trial_btn.clicked.connect(self.accept_trial)
-            row2.addWidget(trial_btn, 1)
+        # Boton "Continuar con plan Estandar" DESACTIVADO
+        # Solo se puede activar con clave de licencia
         rv.addLayout(row2)
 
         sep = QFrame()
@@ -1202,16 +1189,8 @@ class LicenseDialog(QDialog):
         return super().eventFilter(obj, event)
 
     def _on_trial_card_clicked(self):
-        if getattr(self, "_trial_open", False):
-            return
-        if getattr(self, "days_left", -1) < 0:
-            return
-        self._trial_open = True
-        dlg = TrialActivatedDialog(self, max(0, self.days_left))
-        dlg.exec()
-        self._trial_open = False
-        self.trial_accepted = True
-        self.accept()
+        # DESACTIVADO: trial_card ya no es clickeable
+        return
 
     def accept_trial(self) -> None:
         self.trial_accepted = True

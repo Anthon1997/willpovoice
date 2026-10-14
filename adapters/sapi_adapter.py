@@ -29,6 +29,7 @@ class SAPIAdapter:
     # Flags SAPI
     SVSFlagsAsync = 1
     SVSFPurgeBeforeSpeak = 2
+    SVSFIsXML = 8
 
     def __init__(
         self,
@@ -246,6 +247,31 @@ class SAPIAdapter:
         except Exception as exc:
             self.logger.exception("Error al reproducir texto.")
             raise SpeechError("No se pudo reproducir el texto.") from exc
+
+
+
+    def speak_xml(self, text: str, asynchronous: bool = False) -> None:
+        """
+        Reproduce texto XML/SAPI con tags de idioma.
+
+        Usa SVSFIsXML para que SAPI procese etiquetas como:
+        <lang langid="409">English</lang>
+        <lang langid="0C0A">Español</lang>
+        """
+        if not text or not text.strip():
+            raise ValueError("El texto a reproducir no puede estar vacío.")
+
+        self._new_sapi()
+        flags = self.SVSFIsXML
+
+        if asynchronous:
+            flags |= self.SVSFlagsAsync
+
+        try:
+            self.sapi.Speak(text, flags)
+        except Exception as exc:
+            self.logger.exception("Error al reproducir texto XML/SAPI.")
+            raise SpeechError("No se pudo reproducir el texto XML/SAPI.") from exc
 
     def stop(self) -> None:
         """

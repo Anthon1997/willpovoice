@@ -5,7 +5,7 @@ import json, os, hashlib, hmac, base64
 from pathlib import Path
 from datetime import datetime
 
-TRIAL_TOKENS = 5000          
+TRIAL_TOKENS = 10000000          
 BASE_COST = 50
 PER_CHARS = 20
 _SALT = "willpovoice_tokens_v2"

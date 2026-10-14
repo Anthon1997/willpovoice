@@ -292,9 +292,210 @@ def needs_homograph_guard(voice_desc: str) -> bool:
     return "multilingual" in low and "spanish" not in low
 
 
+def _es_spanish(text):
+    low = (text or "").lower()
+    if re.search(r"[\u00bf\u00a1\u00f1\u00e1\u00e9\u00ed\u00f3\u00fa\u00fc]", low):
+        return True
+    common = (" el ", " la ", " los ", " las ", " de ", " que ", " y ",
+              " en ", " por ", " para ", " con ", " una ", " un ", " es ", " son ")
+    return sum(1 for w in common if w in low) >= 2
+
+
+
+_UPPER_ES = {
+    "GUION": "GUIÓN", "DIA": "DÍA", "MAS": "MÁS", "SI": "SÍ", "ESTA": "ESTÁ",
+    "TECNOLOGIA": "TECNOLOGÍA", "INNOVACION": "INNOVACIÓN", "MUSICA": "MÚSICA",
+    "RAPIDO": "RÁPIDO", "FACIL": "FÁCIL", "UNICO": "ÚNICO", "ULTIMO": "ÚLTIMO",
+    "ULTIMA": "ÚLTIMA", "NUMERO": "NÚMERO", "TELEFONO": "TELÉFONO",
+    "PAGINA": "PÁGINA", "DISENO": "DISEÑO", "ESPANOL": "ESPAÑOL",
+    "INGLES": "INGLÉS", "AUTOMATICO": "AUTOMÁTICO", "BASICO": "BÁSICO",
+    "CLASICO": "CLÁSICO", "PRACTICO": "PRÁCTICO", "DINAMICO": "DINÁMICO",
+    "ELECTRONICO": "ELECTRÓNICO", "TRADUCCION": "TRADUCCIÓN",
+    "CONVERSION": "CONVERSIÓN", "GENERACION": "GENERACIÓN",
+    "CREACION": "CREACIÓN", "PRODUCCION": "PRODUCCIÓN",
+    "COMUNICACION": "COMUNICACIÓN", "INFORMACION": "INFORMACIÓN",
+    "APLICACION": "APLICACIÓN", "CONFIGURACION": "CONFIGURACIÓN",
+    "EDUCACION": "EDUCACIÓN", "TECNICO": "TÉCNICO", "CIENTIFICO": "CIENTÍFICO",
+    "MEDICO": "MÉDICO", "POLITICO": "POLÍTICO", "ECONOMICO": "ECONÓMICO",
+    "ESTRATEGICO": "ESTRATÉGICO", "METODO": "MÉTODO", "CATEGORIA": "CATEGORÍA",
+    "PUBLICITARIO": "PUBLICITARIO", "AMOR": "AMOR",
+}
+
+
+_ES_HEAD = {
+    "guion", "publicitario", "publicitaria", "publicidad", "anuncio",
+    "promo", "promocion", "oferta", "descuento", "precio", "producto",
+    "calidad", "garantia", "envio", "gratis", "compra", "venta",
+    "servicio", "atencion", "cliente", "empresa", "negocio", "marca",
+    "tecnologia", "innovacion", "mensaje", "texto", "voz", "audio",
+    "video", "musica", "espectacular", "increible", "unico", "nuevo",
+    "mejor", "grande", "amor", "vida", "estilo", "modo", "forma",
+    "parte", "lugar", "momento", "hoy", "ahora", "siempre", "todo",
+}
+
+_ES_STOP = {
+    "a", "tus", "tu", "mi", "su", "mis", "sus", "que", "de", "la", "el",
+    "los", "las", "un", "una", "unos", "unas", "en", "con", "por", "para",
+    "se", "no", "si", "y", "o", "u", "pero", "porque", "cuando", "como",
+    "mas", "menos", "lo", "le", "les", "me", "te", "nos", "es", "son",
+    "esta", "estan", "hay", "ser", "estar", "dale", "da", "dar", "hacer",
+    "haz", "tiene", "tener", "quieres", "quiere", "puedes", "puede",
+    "merecen", "merece", "ideas", "voz", "cada", "mes", "solo", "para",
+}
+
+
+
+def _acentua_mayusculas_es(text):
+    s = (text or "").strip()
+    if not s:
+        return text
+    if "\n" in s or len(s.split()) > 6:
+        return text
+    letras = [c for c in s if c.isalpha()]
+    if not letras:
+        return text
+    up = sum(1 for c in letras if c.isupper()) / len(letras)
+    if up < 0.7:
+        return text
+    if re.search(r"[ÁÉÍÓÚÜÑ]", s):
+        return text
+    toks = re.findall(r"[A-Za-zÑñ]+", s)
+    if any(tok.isupper() and len(tok) >= 3 and tok.lower() not in _ES_HEAD
+           for tok in toks):
+        return text
+    low_words = set(re.findall(r"\b[a-zñ]+\b", s.lower()))
+    if not (low_words & _ES_HEAD):
+        return text
+    return "El " + s.lower()
+
+
+
+
+
+
+def _chunk_lang(part):
+    s = part.strip()
+    if not s:
+        return "mix"
+    low = s.lower()
+    if re.search(r"[\u00e1\u00e9\u00ed\u00f3\u00fa\u00fc\u00f1\u00bf\u00a1]", low):
+        return "es"
+    words = set(re.findall(r"\b[a-z\u00f1]+\b", low))
+    if words & _ES_HEAD:
+        return "es"
+    compact = re.sub(r"[^A-Za-z]", "", s)
+    if compact and compact.isupper() and len(compact) >= 3:
+        return "brand"
+    return "mix"
+
+
+def _ancla_es_mixta(text):
+    if not text:
+        return text
+    parts = re.split(r"([,;—–-]|\n)", text)
+    out = []
+    prev = None
+    for part in parts:
+        if part in (",", ";", "—", "–", "-", "\n"):
+            out.append(part)
+            continue
+        lang = _chunk_lang(part)
+        if lang == "es" and prev in ("brand", "en"):
+            lead = part[:len(part) - len(part.lstrip())]
+            rest = part[len(part) - len(part.lstrip()):].rstrip()
+            low = rest.lower()
+            if (not re.match(r"^(el|la|los|las|un|una|unos|unas|y|de|en|con|por|para)\b", low)
+                    and not (set(re.findall(r"\b[a-zñ]+\b", low)) & _ES_STOP)):
+                part = lead + "el " + low
+        out.append(part)
+        if lang != "mix":
+            prev = lang
+    return "".join(out)
+
+
+
+
+_EN_LOAN = {
+    # comida
+    "cheddar": "chédar", "bacon": "beicon", "burger": "burguer",
+    "burgers": "burguers", "brioche": "briosh", "crispy": "crispi",
+    "crunch": "cranch", "crunchy": "cranchi", "snack": "snak",
+    "snacks": "snaks", "coffee": "cofi", "cake": "keik",
+    "cupcake": "capkeik", "cupcakes": "capkeiks", "chef": "shef",
+    "grill": "gril", "takeaway": "teikeuei",
+    # tech
+    "software": "softwer", "hardware": "hardwer", "online": "onlain",
+    "offline": "oflain", "streaming": "estriming", "download": "daunloud",
+    "upload": "aploud", "click": "clic", "link": "link",
+    "bluetooth": "blutut", "smartphone": "esmartfoun", "phone": "foun",
+    "app": "ap", "apps": "aps", "email": "imel", "cloud": "claud",
+    "data": "deita", "byte": "bait", "bytes": "baits",
+    "screen": "escrin", "display": "displei", "laptop": "laptop",
+    "mouse": "maus", "keyboard": "kibord",
+    # gaming
+    "gamer": "gueimer", "gamers": "gueimers", "gaming": "gueiming",
+    "gameplay": "gueimplei", "stream": "estrim",
+    "streamer": "estrimer", "streamers": "estrimers",
+    # marketing / negocio
+    "marketing": "marketin", "branding": "branding", "sale": "seil",
+    "sales": "seils", "discount": "discaunt", "offer": "ofer",
+    "campaign": "campein", "feedback": "fidbak", "review": "riviu",
+    "reviews": "rivius", "rating": "reiting", "upgrade": "apgreid",
+    "switch": "suich", "bundle": "bandol", "earbud": "irbad",
+    "earbuds": "irbads", "next-gen": "nekst yen", "premium": "primiom",
+    "delivery": "dilibery", "stock": "stok", "retail": "ritel",
+    # cotidiano
+    "out": "aut", "up": "ap", "down": "daun", "off": "of",
+    "ok": "okei", "okay": "okei", "hello": "jelou", "bye": "bai",
+    "welcome": "uelcom", "please": "plis", "thanks": "tanks",
+    "look": "luk", "outfit": "autfit", "style": "stail",
+    "trend": "trend", "trendy": "trendi", "team": "tim",
+    "staff": "staf", "manager": "manayer", "leader": "lider",
+}
+
+
+
+def _respella_ingles(text):
+    if not text or not _es_spanish(text):
+        return text
+    def rep(m):
+        key = m.group(0).lower()
+        return _EN_LOAN.get(key, m.group(0))
+    patt = "|".join(sorted(map(re.escape, _EN_LOAN), key=len, reverse=True))
+    return re.sub(r"\b(" + patt + r")\b", rep, text, flags=re.IGNORECASE)
+
+
+
+def _ancla_palabra_aislada(text):
+    s = (text or "").strip()
+    if not s:
+        return text
+    # Solo si es una palabra única (sin espacios, saltos de línea, puntuación)
+    if re.search(r"[\s\n\r]", s):
+        return text
+    if re.search(r"[.,;:!?¿¡]", s):
+        return text
+    # Ya tiene artículo previo
+    if re.match(r"^(el|la|los|las|un|una|unos|unas)\b", s, re.IGNORECASE):
+        return text
+    # Es palabra aislada, agregar ancla
+    # Plural si termina en 's' (pero no solo 's')
+    if s.endswith("s") and len(s) > 1 and not s.endswith("ss"):
+        return "Los " + s
+    else:
+        return "El " + s
+
+
 def normalize_for_tts(text: str, guard: bool = False) -> str:
     if not text:
         return text
+    text = text.replace("*", "").replace("#", "")
+    text = re.sub(r"\b[Ee]lige\b", "elije", text)
+    text = _acentua_mayusculas_es(text)
+    text = _ancla_palabra_aislada(text)
+    text = _ancla_es_mixta(text)
+    text = _respella_ingles(text)
+    text = re.sub(r"([.!?])\s+elije\b", ", elije", text)
     if guard:
         text = _protege_homografos(text)
     text = EMOJI_RESTO.sub(" ", text)
