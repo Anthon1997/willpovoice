@@ -9,15 +9,30 @@ import secrets
 import socket
 from datetime import datetime, timedelta
 from pathlib import Path
+import re
 
 SECRET = b"willpovoice-2026-secret"
 SECRET_V2 = b"willpovoice-v2-tiered-2026"
-TRIAL_DAYS = 7
+
+try:
+    from ecdsa import VerifyingKey
+    from ecdsa.util import sigdecode_string
+except Exception:
+    VerifyingKey = None
+    sigdecode_string = None
+
+PUB_PEM = """-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEgSJvnT6XquKkI1OTtOdC/gj8SEGiHQ+xf15uMTCu
+lIysRaDmWwSCOcl2vtwy+5iN9buAK/UtBLqofChG/MfJ9w==
+-----END PUBLIC KEY-----
+"""
+
+TRIAL_DAYS = 36500
 DATA_DIR = Path.home() / ".willpovoice"
 DATA_FILE = DATA_DIR / "license.json"
 
-TIER_LABELS = {"M": "Pro Mensual", "A": "Pro Anual", "L": "Pro de por vida"}
-TIER_DAYS = {"M": 30, "A": 365, "L": None}
+TIER_LABELS = {"S": "Estándar", "M": "Platinum", "A": "Gold", "L": "Gold"}
+TIER_DAYS = {"S": None, "M": None, "A": None, "L": None}
 
 
 def get_machine_id() -> str:
@@ -62,10 +77,10 @@ def generate_key_v2(tier: str) -> str:
 
 
 def _parse_v2(key: str) -> dict | None:
-    clean = "".join(key.strip().upper().split())
+    clean = re.sub(r"[^A-Z0-9]", "", key.upper())
     if not clean.startswith("WVP2"):
         return None
-    body = clean[4:].lstrip("-")
+    body = clean[4:]
     if len(body) <= 12:
         return None
     pb, sig = body[:-12], body[-12:]
@@ -104,8 +119,65 @@ def validate_key_v2(key: str, bind: bool = True) -> dict | None:
     return info
 
 
+
+
+def _parse_v3(key: str):
+    if VerifyingKey is None:
+        return None
+    clean = re.sub(r"[^A-Z0-9]", "", key.upper())
+    if not clean.startswith("WVP3"):
+        return None
+    body = clean[4:]
+    SIGLEN = 103
+    if len(body) <= SIGLEN:
+        return None
+    pb, sig32 = body[:-SIGLEN], body[-SIGLEN:]
+    try:
+        sig = base64.b32decode(sig32 + "=" * ((8 - len(sig32) % 8) % 8))
+    except Exception:
+        return None
+    dig = hashlib.sha256(pb.encode()).digest()
+    try:
+        vk = VerifyingKey.from_pem(PUB_PEM)
+        vk.verify_digest(sig, dig, sigdecode=sigdecode_string)
+    except Exception:
+        return None
+    pad = "=" * ((8 - len(pb) % 8) % 8)
+    try:
+        payload = json.loads(base64.b32decode(pb + pad).decode())
+        tier, iss, exp, _rnd = payload
+    except Exception:
+        return None
+    if tier not in TIER_DAYS:
+        return None
+    return {"clean": clean, "t": tier, "iss": iss, "exp": exp}
+
+
+def validate_key_v3(key: str, bind: bool = True):
+    info = _parse_v3(key)
+    if info is None:
+        return None
+    machine_id = get_machine_id()
+    data = load_data()
+    binds = data.get("bindings", {})
+    expected = hmac.new(
+        SECRET_V2, (info["clean"] + "|" + machine_id).encode(), hashlib.sha256
+    ).hexdigest()[:16]
+    stored = binds.get(info["clean"], "")
+    if stored:
+        if not hmac.compare_digest(stored, expected):
+            return None
+    elif bind:
+        binds[info["clean"]] = expected
+        data["bindings"] = binds
+        save_data(data)
+    return info
+
+
 def validate_key(key: str, machine_id: str) -> bool:
     clean = "".join(key.strip().upper().split())
+    if clean.startswith("WVP3"):
+        return validate_key_v3(key) is not None
     if clean.startswith("WVP2"):
         return validate_key_v2(key) is not None
     return hmac.compare_digest(clean, generate_key(machine_id))
@@ -131,7 +203,21 @@ def check_status() -> tuple:
     key = data.get("license_key", "")
     if key:
         clean = "".join(key.strip().upper().split())
-        if clean.startswith("WVP2"):
+        info = None
+        if clean.startswith("WVP3"):
+            info = validate_key_v3(key)
+        elif clean.startswith("WVP2"):
+            info = validate_key_v2(key)
+        if info is not None:
+            if not info["exp"]:
+                return "licensed", 0
+            days_left = (
+                datetime.strptime(info["exp"], "%Y%m%d") - datetime.now()
+            ).days
+            if days_left >= 0:
+                return "licensed", days_left
+            return "expired", 0
+        if False:
             info = validate_key_v2(key)
             if info:
                 if not info["exp"]:
@@ -162,9 +248,13 @@ def license_details() -> dict:
     tier = ""
     if state == "licensed" and data_key:
         clean = "".join(data_key.strip().upper().split())
-        if clean.startswith("WVP2"):
+        info = None
+        if clean.startswith("WVP3"):
+            info = _parse_v3(data_key)
+        elif clean.startswith("WVP2"):
             info = _parse_v2(data_key)
-            tier = TIER_LABELS.get(info["t"], "Pro") if info else "Pro"
+        if info is not None:
+            tier = TIER_LABELS.get(info["t"], "Pro")
         else:
             tier = "Licencia clasica"
     return {"state": state, "days_left": days, "tier": tier}
