@@ -27,6 +27,7 @@ from core import file_reader, license_manager
 from core import trial_tokens
 from core.audio_exporter import AudioExporter
 from core.tts_engine import TTSEngine
+from ui.clone_voice_page import CloneVoicePage
 from ui.main_window import (ExportWorker, LicenseDialog,
     TrialActivatedDialog)
 
@@ -90,6 +91,7 @@ PREMIUM_PHOTOS = {
     "william": "ms_william.png", "vivienne": "ms_vivienne.png",
     "thalita": "ms_thalita.png", "elvira": "ms_elvira.png",
     "alonso": "ms_alonso.png", "dalia": "ms_dalia.png",
+    "alfredo": "foto_narrador.png",
 }
 
 
@@ -235,6 +237,73 @@ def make_icon(kind, color, size=20):
         p.setPen(Qt.PenStyle.NoPen)
         p.drawRoundedRect(int(s * 0.3), int(s * 0.25), int(s * 0.14), int(s * 0.5), 2, 2)
         p.drawRoundedRect(int(s * 0.56), int(s * 0.25), int(s * 0.14), int(s * 0.5), 2, 2)
+    elif kind == "robot":
+        # Cabeza de robot con antena
+        p.setBrush(QColor(color))
+        p.setPen(Qt.PenStyle.NoPen)
+        # Antena
+        p.drawLine(pt(0.5, 0.1), pt(0.5, 0.25))
+        p.drawEllipse(int(s * 0.42), int(s * 0.05), int(s * 0.16), int(s * 0.16))
+        # Cabeza
+        p.drawRoundedRect(int(s * 0.25), int(s * 0.25), int(s * 0.5), int(s * 0.45), 4, 4)
+        # Ojos
+        p.setBrush(QColor("#ffffff"))
+        p.drawEllipse(int(s * 0.32), int(s * 0.38), int(s * 0.1), int(s * 0.1))
+        p.drawEllipse(int(s * 0.58), int(s * 0.38), int(s * 0.1), int(s * 0.1))
+        # Boca
+        p.setPen(QPen(QColor("#ffffff"), 1.5))
+        p.drawLine(pt(0.4, 0.6), pt(0.6, 0.6))
+    elif kind == "robot":
+        # Cabeza de perfil con circuitos (IA)
+        p.setPen(QPen(QColor(color), max(1.4, size * 0.10)))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        # Perfil de cabeza (silueta)
+        head = QPainterPath()
+        head.moveTo(pt(0.55, 0.15))
+        head.cubicTo(pt(0.75, 0.15).x(), pt(0.75, 0.15).y(),
+                     pt(0.85, 0.25).x(), pt(0.85, 0.25).y(),
+                     pt(0.82, 0.40).x(), pt(0.82, 0.40).y())
+        head.cubicTo(pt(0.80, 0.50).x(), pt(0.80, 0.50).y(),
+                     pt(0.88, 0.55).x(), pt(0.88, 0.55).y(),
+                     pt(0.82, 0.62).x(), pt(0.82, 0.62).y())
+        head.cubicTo(pt(0.78, 0.66).x(), pt(0.78, 0.66).y(),
+                     pt(0.78, 0.70).x(), pt(0.78, 0.70).y(),
+                     pt(0.72, 0.72).x(), pt(0.72, 0.72).y())
+        head.cubicTo(pt(0.65, 0.74).x(), pt(0.65, 0.74).y(),
+                     pt(0.60, 0.80).x(), pt(0.60, 0.80).y(),
+                     pt(0.55, 0.85).x(), pt(0.55, 0.85).y())
+        head.lineTo(pt(0.30, 0.85))
+        head.cubicTo(pt(0.20, 0.75).x(), pt(0.20, 0.75).y(),
+                     pt(0.15, 0.55).x(), pt(0.15, 0.55).y(),
+                     pt(0.20, 0.35).x(), pt(0.20, 0.35).y())
+        head.cubicTo(pt(0.25, 0.20).x(), pt(0.25, 0.20).y(),
+                     pt(0.40, 0.15).x(), pt(0.40, 0.15).y(),
+                     pt(0.55, 0.15).x(), pt(0.55, 0.15).y())
+        p.drawPath(head)
+        # Circuitos internos (nodos y líneas)
+        p.setBrush(QColor(color))
+        nodes = [(0.40, 0.35), (0.55, 0.30), (0.70, 0.38),
+                 (0.45, 0.55), (0.60, 0.50), (0.72, 0.55),
+                 (0.35, 0.70), (0.50, 0.68), (0.62, 0.72)]
+        r = max(1.2, size * 0.07)
+        for nx, ny in nodes:
+            p.drawEllipse(int(nx * s - r), int(ny * s - r), int(r*2), int(r*2))
+        # Líneas de circuito entre nodos
+        p.setPen(QPen(QColor(color), max(1.0, size * 0.07)))
+        connections = [((0.40, 0.35), (0.55, 0.30)),
+                       ((0.55, 0.30), (0.70, 0.38)),
+                       ((0.40, 0.35), (0.45, 0.55)),
+                       ((0.55, 0.30), (0.60, 0.50)),
+                       ((0.70, 0.38), (0.72, 0.55)),
+                       ((0.45, 0.55), (0.60, 0.50)),
+                       ((0.60, 0.50), (0.72, 0.55)),
+                       ((0.45, 0.55), (0.35, 0.70)),
+                       ((0.45, 0.55), (0.50, 0.68)),
+                       ((0.60, 0.50), (0.62, 0.72)),
+                       ((0.35, 0.70), (0.50, 0.68)),
+                       ((0.50, 0.68), (0.62, 0.72))]
+        for (x1, y1), (x2, y2) in connections:
+            p.drawLine(pt(x1, y1), pt(x2, y2))
     else:
         p.setBrush(QColor(color))
         p.setPen(Qt.PenStyle.NoPen)
@@ -1596,6 +1665,15 @@ class VoiceCardV2(QFrame):
 def _rebuild_voices_page(self):
     if not getattr(self, "_voc_built", False):
         return
+    try:
+        from core.pocket_cloner import cloner_instance
+        _cloned = cloner_instance.list_saved_voices()
+    except Exception:
+        _cloned = []
+    self._cloned_set = set(_cloned)
+    if _cloned:
+        _base = [v for v in getattr(self, "_voices", []) if v not in self._cloned_set]
+        self._voices = _base + list(_cloned)
     self._clear_layout(self.all_layout)
     q = getattr(self, "_vsearch", "")
     tab = getattr(self, "_vtab", "todas")
@@ -2031,6 +2109,34 @@ class HistoryCard(QFrame):
         )
 
 
+class _ClonedPreviewWorker(QThread):
+    """Hilo para generar preview de voz clonada sin congelar la UI"""
+    done = Signal(str)
+    failed = Signal(str)
+
+    def __init__(self, voice_name, text, parent=None):
+        super().__init__(parent)
+        self.voice_name = voice_name
+        self.text = text
+        self._stop_requested = False
+
+    def request_stop(self):
+        """Solicita detener el worker (compatibilidad con interfaz SAPI)"""
+        self._stop_requested = True
+
+    def run(self):
+        if self._stop_requested:
+            return
+        try:
+            from core.pocket_cloner import cloner_instance
+            out = cloner_instance.generate_with_voice(self.voice_name, self.text)
+            if not self._stop_requested:
+                self.done.emit(out)
+        except Exception as e:
+            if not self._stop_requested:
+                self.failed.emit(str(e))
+
+
 class MainWindow(QMainWindow):
     MAX_HISTORY = 10
     preview_changed = Signal(str, bool)
@@ -2131,6 +2237,8 @@ class MainWindow(QMainWindow):
         return out
 
     def _is_premium(self, name):
+        if name in getattr(self, "_cloned_set", set()):
+            return True
         low = name.lower()
         return "multilingual" in low or any(k in low for k in PREMIUM_PHOTOS)
 
@@ -2355,6 +2463,13 @@ def _build_ui(self):
         btn.clicked.connect(lambda _=False, pg=page: self._switch_page(pg))
         sb.addWidget(btn)
         self._nav.append((btn, page))
+
+    # Boton de Clonar Voz con icono de robot
+    clone_btn = NavButton("robot", "Clonar voz")
+    clone_btn.clicked.connect(lambda _=False, pg=7: self._switch_page(pg))
+    sb.addWidget(clone_btn)
+    self._nav.append((clone_btn, 7))
+
     sep = QFrame()
     sep.setFixedHeight(1)
     sep.setStyleSheet(f"background: {BORDER};")
@@ -3987,6 +4102,13 @@ def _build_ui(self):
     outer.addWidget(scroll)
     self.pages.addWidget(page6)
 
+    # Pagina 7: Clonacion de Voz
+    from ui.clone_voice_page import CloneVoicePage
+    page7 = CloneVoicePage()
+    page7.setStyleSheet("background: transparent;")
+    self._clone_page = page7
+    self.pages.addWidget(page7)
+
     # ---------- PANEL DERECHO ----------
     self.right_panel = QFrame()
     self.right_panel.setObjectName("rightPanel")
@@ -4173,12 +4295,32 @@ def _connect_signals(self):
 
 
 def _switch_page(self, index):
+    if index == 7:
+        _tier = ""
+        try:
+            _det = license_manager.license_details()
+            if _det.get("state") == "licensed":
+                _tier = _det.get("tier", "")
+        except Exception:
+            _tier = ""
+        if _tier not in ("Platinum",):
+            from PySide6.QtWidgets import QMessageBox as _QMB
+            _m = _QMB(self)
+            _m.setWindowTitle("Función Platinum")
+            _m.setIcon(_QMB.Icon.Information)
+            _m.setText("La Clonación de Voz está disponible solo para el plan Platinum.")
+            _m.setInformativeText("Actualiza tu plan para desbloquear esta función.")
+            _m.setStandardButtons(_QMB.StandardButton.Ok)
+            _m.exec()
+            return
     self.pages.setCurrentIndex(index)
     if index == 5:
         self._layout_chat_bg()
     for i, (btn, _pg) in enumerate(self._nav):
         btn.set_active(i == index)
     self.right_panel.setVisible(index == 0)
+    if index == 7:
+        self.right_panel.setVisible(False)
     if index == 2 and not getattr(self, "_all_built", False):
         self._all_built = True
         self._rebuild_all_page()
@@ -4242,6 +4384,10 @@ def _make_card(self, name, layout):
     card.fav_toggled.connect(lambda n=name: self._toggle_fav(n))
     card.preview_toggled.connect(lambda n=name: self._toggle_preview(n))
     layout.addWidget(card)
+    # Índice para localizar tarjetas por nombre (spinner de preview)
+    if not hasattr(self, "_cards_by_name"):
+        self._cards_by_name = {}
+    self._cards_by_name[name] = card
 
 
 def _voice_lang(self, name):
@@ -4482,6 +4628,15 @@ def _load_voices(self):
             dedup.append(v)
         voices = dedup
         self._voices = voices
+        # Inyectar voces clonadas (Alfredo, etc.)
+        try:
+            from core.pocket_cloner import cloner_instance
+            _cloned = cloner_instance.list_saved_voices()
+            self._cloned_set = set(_cloned)
+            self._voices = [v for v in self._voices if v not in self._cloned_set] + list(_cloned)
+        except Exception as _e:
+            print("No se pudieron inyectar voces clonadas: " + str(_e))
+            self._cloned_set = set()
         if not any(self._is_premium(v) for v in voices):
             self._repair_engine()
         self._refill_combo()
@@ -4541,6 +4696,10 @@ def _on_combo_voice(self):
 
 
 def _select_voice(self, name):
+    if name in getattr(self, "_cloned_set", set()):
+        self._selected_cloned = name
+    else:
+        self._selected_cloned = ""
     self._selected_voice = name
     if hasattr(self, "pro_badge"):
         self.pro_badge.setVisible(self._is_premium(name))
@@ -4950,6 +5109,10 @@ def speak_text(self):
         if not text:
             self.statusBar().showMessage("Escribe un texto antes de reproducir.")
             return
+        # Desviar a voz clonada si está seleccionada
+        if getattr(self, "_selected_cloned", ""):
+            self._tts_cloned(self._selected_cloned, text)
+            return
         if not self._trial_gate(text):
             return
         try:
@@ -5150,6 +5313,9 @@ def export_wav(self):
                                           "Archivos WAV (*.wav)")
     if not path:
         return
+    if getattr(self, "_selected_cloned", ""):
+        self._export_cloned(text, path, False)
+        return
     self._trial_spend(text)
     self._run_export(self._tts_text(text), path, False)
 
@@ -5168,6 +5334,9 @@ def export_mp3(self):
     if not path.lower().endswith(".mp3"):
         path += ".mp3"
     self._mp3_final_path = path
+    if getattr(self, "_selected_cloned", ""):
+        self._export_cloned(text, path, True)
+        return
     self._trial_spend(text)
     self._run_export(self._tts_text(text), tempfile.mktemp(suffix=".wav"), True)
 
@@ -5593,7 +5762,7 @@ def _open_license_dialog(self):
             data["license_key"] = dialog.activated_key
             license_manager.save_data(data)
             try:
-                self.license_label.setText("Version licenciada.")
+                pass  # sin license_label: el estado se muestra en statusBar y tarjeta premium
             except Exception:
                 pass
             try:
@@ -5627,7 +5796,7 @@ def _check_license(self):
     except Exception:
         pass
     if state == "licensed":
-        self.license_label.setText("Version licenciada.")
+        pass  # sin license_label: el estado se muestra en statusBar y tarjeta premium
         self.statusBar().showMessage("Version licenciada.")
         return True
     if getattr(self, "_suppress_license_dialog", False) and state == "trial":
@@ -5652,7 +5821,7 @@ def _check_license(self):
         data = license_manager.load_data()
         data["license_key"] = dialog.activated_key
         license_manager.save_data(data)
-        self.license_label.setText("Version licenciada.")
+        pass  # sin license_label: el estado se muestra en statusBar y tarjeta premium
         self._refresh_prem_card()
         return True
     return dialog.trial_accepted
@@ -6595,6 +6764,8 @@ class PreviewWorker(QThread):
         import queue
         self._q = queue.Queue()
         self._stopflag = False
+        self._voice_cache = {}  # Cache para evitar iterar 300+ voces
+        self._voice_cache = {}  # Caché para evitar iterar 300+ voces
 
     def request(self, desc):
         self._stopflag = True
@@ -6637,11 +6808,13 @@ class PreviewWorker(QThread):
                 break
             try:
                 if sapi is not None:
-                    tok = None
-                    for tk in sapi.GetVoices():
-                        if tk.GetDescription() == item:
-                            tok = tk
-                            break
+                    tok = self._voice_cache.get(item)
+                    if tok is None:
+                        for tk in sapi.GetVoices():
+                            if tk.GetDescription() == item:
+                                tok = tk
+                                self._voice_cache[item] = tok
+                                break
                     if tok is not None:
                         sapi.Voice = tok
                         sapi.Speak("Hola esta es mi voz", 1)
@@ -6696,6 +6869,9 @@ def _on_preview_finished(self, name):
 
 
 def _toggle_preview(self, name):
+    if name in getattr(self, "_cloned_set", set()):
+        self._play_cloned_preview(name)
+        return
     if getattr(self, "_preview_name", "") == name and getattr(
             self, "_preview_playing", False):
         self._get_preview_worker().request_stop()
@@ -7146,7 +7322,252 @@ MainWindow._on_preview_finished = _on_preview_finished
 
 MainWindow._load_entry = _load_entry
 MainWindow._delete_entry = _delete_entry
+
+def _play_cloned_preview(self, name):
+    """Genera y reproduce una muestra con la voz clonada (con caché WAV)"""
+    self._set_card_spin(name, True)
+    if getattr(self, "_prev_player", None):
+        try:
+            self._prev_player.stop()
+        except Exception:
+            pass
+    # Buscar WAV pregrabado en voices/previews/<name>.wav
+    preview_dir = _cloned_preview_dir()
+    preview_dir.mkdir(parents=True, exist_ok=True)
+    cached = preview_dir / (name + ".wav")
+    if cached.exists():
+        print(f"▶ Preview instantáneo desde caché: {cached.name}")
+        self._on_cloned_preview_ready(str(cached))
+        return
+    # Primera vez: generar y cachear
+    if getattr(self, "_cloned_preview_worker", None) and self._cloned_preview_worker.isRunning():
+        self._cloned_preview_worker.quit()
+        self._cloned_preview_worker.wait()
+    sample = "Hola, esta es mi voz. Soy Alfredo, tu narrador ultrarrealista."
+    self._cloned_preview_name = name
+    self._cloned_preview_worker = _ClonedPreviewWorker(name, sample, self)
+    self._cloned_preview_worker.done.connect(self._on_cloned_preview_cached)
+    self._cloned_preview_worker.failed.connect(self._on_cloned_preview_failed)
+    self._cloned_preview_worker.start()
+
+def _on_cloned_preview_cached(self, wav_path):
+    """Guarda el WAV en caché y lo reproduce"""
+    preview_dir = _cloned_preview_dir()
+    preview_dir.mkdir(parents=True, exist_ok=True)
+    cached = preview_dir / (Path(wav_path).stem.replace("_cloned", "") + ".wav")
+    try:
+        import shutil
+        shutil.copy2(wav_path, str(cached))
+        print(f"💾 Preview cacheado: {cached.name}")
+    except Exception:
+        pass
+    self._on_cloned_preview_ready(wav_path)
+
+
+def _on_cloned_preview_ready(self, wav_path):
+    """Reproduce el WAV generado con QMediaPlayer"""
+    name = getattr(self, "_cloned_preview_name", "") or getattr(self, "_preview_name", "") or getattr(self, "_selected_cloned", "")
+    if name:
+        self._set_card_spin(name, False)
+    from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
+    from PySide6.QtCore import QUrl
+    if not hasattr(self, "_prev_player"):
+        self._prev_player = QMediaPlayer(self)
+        self._prev_audio = QAudioOutput(self)
+        self._prev_player.setAudioOutput(self._prev_audio)
+    self._prev_player.stop()
+    self._prev_player.setSource(QUrl.fromLocalFile(wav_path))
+    self._prev_player.play()
+
+
+def _on_cloned_preview_failed(self, err):
+    name = getattr(self, "_cloned_preview_name", "") or getattr(self, "_preview_name", "") or getattr(self, "_selected_cloned", "")
+    if name:
+        self._set_card_spin(name, False)
+    print(f"Error en preview clonada: {err}")
+
+
+def _tts_cloned(self, voice_name, text):
+    """Genera audio completo con voz clonada en hilo separado"""
+    if getattr(self, "_cloned_tts_worker", None) and self._cloned_tts_worker.isRunning():
+        return
+    self._set_player_icon(True, loading=True)
+    self.statusBar().showMessage("Generando audio con voz clonada...")
+    self._cloned_tts_worker = _ClonedPreviewWorker(voice_name, text, self)
+    self._cloned_tts_worker.done.connect(self._on_tts_cloned_done)
+    self._cloned_tts_worker.failed.connect(self._on_tts_cloned_failed)
+    self._cloned_tts_worker.start()
+
+
+def _on_tts_cloned_done(self, wav_path):
+    """Reproduce el audio generado completo"""
+    from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
+    from PySide6.QtCore import QUrl
+    if not hasattr(self, "_tts_player"):
+        self._tts_player = QMediaPlayer(self)
+        self._tts_audio = QAudioOutput(self)
+        self._tts_player.setAudioOutput(self._tts_audio)
+    self._tts_player.stop()
+    self._tts_player.setSource(QUrl.fromLocalFile(wav_path))
+    self._tts_player.play()
+    self._set_player_icon(True, loading=False)
+    print(f"Audio clonado reproducido: {wav_path}")
+
+
+def _on_tts_cloned_failed(self, err):
+    self._set_player_icon(False)
+    self.statusBar().showMessage(f"Error al generar con voz clonada: {err}")
+    print(f"Error al generar con voz clonada: {err}")
+
+
+def _export_cloned(self, text, path, is_mp3):
+    """Exporta audio con voz clonada directamente a archivo (sin SAPI)"""
+    if getattr(self, "_cloned_export_worker", None) and self._cloned_export_worker.isRunning():
+        self.statusBar().showMessage("Ya hay una exportacion en curso...")
+        return
+    self._export_target = (path, is_mp3)
+    dlg = ExportProgressDialog(
+        self, "Exportando MP3..." if is_mp3 else "Exportando WAV...")
+    dlg.show()
+    words = len(text.split()) or 1
+    factor = 1.0 + self.rate_slider.value() / 20.0
+    dlg.start_estimated(words / (1.6 * factor) + 2.0)
+    dlg.set_status("Generando voz clonada (offline)...")
+    self._cloned_export_dlg = dlg
+    self.statusBar().showMessage("Generando audio con voz clonada...")
+    self._cloned_export_worker = _ClonedPreviewWorker(self._selected_cloned, text, self)
+    self._cloned_export_worker.done.connect(self._on_export_cloned_done)
+    self._cloned_export_worker.failed.connect(self._on_export_cloned_failed)
+    self._cloned_export_worker.start()
+
+
+def _on_export_cloned_done(self, wav_path):
+    """Copia o convierte el WAV generado al destino de exportacion"""
+    import shutil
+    path, is_mp3 = getattr(self, "_export_target", ("", False))
+    dlg = getattr(self, "_cloned_export_dlg", None)
+    try:
+        if dlg is not None:
+            dlg.set_progress(95, "Finalizando exportacion...")
+        if is_mp3:
+            from core.mp3_encoder import wav_to_mp3
+            wav_to_mp3(wav_path, path)
+        else:
+            shutil.copy2(wav_path, path)
+        if dlg is not None:
+            dlg.finish()
+            dlg.close()
+            self._cloned_export_dlg = None
+        self.statusBar().showMessage(f"Audio exportado: {path}")
+        print(f"💾 Audio clonado exportado: {path}")
+    except Exception as e:
+        if dlg is not None:
+            dlg.close()
+            self._cloned_export_dlg = None
+        self.statusBar().showMessage(f"Error al exportar: {e}")
+        print(f"⚠️ Error al exportar audio clonado: {e}")
+
+
+def _on_export_cloned_failed(self, err):
+    dlg = getattr(self, "_cloned_export_dlg", None)
+    if dlg is not None:
+        dlg.close()
+        self._cloned_export_dlg = None
+    self.statusBar().showMessage(f"No se pudo exportar: {err}")
+    print(f"⚠️ Error en exportacion clonada: {err}")
+
+
+def _set_card_spin(self, name, on):
+    """Activa/desactiva un spinner sobre el PreviewPhoto de la tarjeta"""
+    cards = getattr(self, "_cards_by_name", {})
+    card = cards.get(name)
+    if card is None:
+        return
+    photo = getattr(card, "photo", None)
+    if photo is None:
+        return
+    overlay = getattr(card, "_spin_overlay", None)
+    timer = getattr(card, "_spin_timer", None)
+
+    if on:
+        if overlay is None:
+            from PySide6.QtWidgets import QLabel
+            from PySide6.QtCore import Qt, QTimer
+            overlay = QLabel(photo)
+            overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            overlay.setStyleSheet("background: transparent;")
+            overlay.setGeometry(0, 0, photo.width(), photo.height())
+            overlay.show()
+            overlay.raise_()
+            card._spin_overlay = overlay
+            card._spin_angle = 0
+
+            def _tick():
+                from PySide6.QtGui import QPainter, QPen, QColor
+                from PySide6.QtCore import QRectF
+                card._spin_angle = (card._spin_angle + 40) % 360
+                pix = overlay.pixmap()
+                if pix is None or pix.isNull() or pix.size() != overlay.size():
+                    from PySide6.QtGui import QPixmap
+                    pix = QPixmap(overlay.size())
+                pix.fill(Qt.GlobalColor.transparent)
+                p = QPainter(pix)
+                p.setRenderHint(QPainter.RenderHint.Antialiasing)
+                p.setPen(QPen(QColor("#7c5cff"), 3))
+                w, h = pix.width(), pix.height()
+                side = min(w, h) - 4
+                x = (w - side) // 2
+                y = (h - side) // 2
+                p.drawArc(QRectF(x, y, side, side),
+                          card._spin_angle * 16, 300 * 16)
+                p.end()
+                overlay.setPixmap(pix)
+
+            card._spin_tick = _tick
+            timer = QTimer(card)
+            timer.timeout.connect(_tick)
+            timer.start(60)
+            card._spin_timer = timer
+            _tick()
+        else:
+            overlay.show()
+            overlay.raise_()
+            if timer and not timer.isActive():
+                timer.start(60)
+    else:
+        if overlay is not None:
+            overlay.hide()
+        if timer is not None and timer.isActive():
+            timer.stop()
+
+
+MainWindow._set_card_spin = _set_card_spin
+def _cloned_preview_dir():
+    """Carpeta de cache de previews en zona escribible del usuario"""
+    import os
+    base = os.environ.get("LOCALAPPDATA") or os.environ.get("TEMP") or str(Path.home())
+    d = Path(base) / "WillpoVoice" / "previews"
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        import tempfile
+        d = Path(tempfile.gettempdir()) / "WillpoVoice_previews"
+        d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 MainWindow._toggle_preview = _toggle_preview
+MainWindow._play_cloned_preview = _play_cloned_preview
+MainWindow._on_cloned_preview_ready = _on_cloned_preview_ready
+MainWindow._on_cloned_preview_cached = _on_cloned_preview_cached
+MainWindow._on_cloned_preview_failed = _on_cloned_preview_failed
+MainWindow._tts_cloned = _tts_cloned
+MainWindow._on_tts_cloned_done = _on_tts_cloned_done
+MainWindow._on_tts_cloned_failed = _on_tts_cloned_failed
+MainWindow._export_cloned = _export_cloned
+MainWindow._on_export_cloned_done = _on_export_cloned_done
+MainWindow._on_export_cloned_failed = _on_export_cloned_failed
+
 MainWindow._stop_preview = _stop_preview
 MainWindow._check_preview_end = _check_preview_end
 MainWindow._avatar_pixmap_cached = _avatar_pixmap_cached
@@ -7160,6 +7581,8 @@ MainWindow._lang_filtered = _lang_filtered
 
 def _sort_key(self, name):
     low = (name or "").lower()
+    if name in getattr(self, "_cloned_set", set()):
+        return -1
     if "multilingual" in low:
         return 0
     try:
@@ -8914,6 +9337,9 @@ def _es_spanish(text):
 
 
 def _tts_text(self, text):
+    if getattr(self, "_selected_cloned", ""):
+        self._tts_cloned(self._selected_cloned, text)
+        return text  # Devolver texto para no romper el flujo SAPI
     voz = ""
     try:
         voz = self.voice_combo.currentText()
@@ -8941,6 +9367,9 @@ MainWindow._tts_text = _tts_text
 
 
 def _express_segments(self, text):
+    # Desactivar modo expresivo para voces clonadas (solo SAPI)
+    if getattr(self, "_selected_cloned", ""):
+        return [(0, len(text or ""), 0)]
     import re as _re
     parts = []
     last = 0
@@ -8982,6 +9411,9 @@ MainWindow._express_segments = _express_segments
 
 
 def _show_express_hint(self):
+    # No mostrar hint de modo expresivo para voces clonadas
+    if getattr(self, "_selected_cloned", ""):
+        return
     from PySide6.QtCore import QTimer, QPropertyAnimation
     from PySide6.QtWidgets import QGraphicsOpacityEffect
     hint = getattr(self, "_express_hint", None)

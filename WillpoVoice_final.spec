@@ -6,7 +6,11 @@ datas = []
 for d in ("assets", "resources", "img", "images", "fotos"):
     if Path(d).exists():
         datas.append((d, d))
-for pkg in ("docx", "lxml"):
+# Modelos de Pocket TTS (offline)
+models_dir = Path("models/pocket_tts")
+if models_dir.exists():
+    datas.append(("models/pocket_tts", "models/pocket_tts"))
+for pkg in ("docx", "lxml", "pocket_tts"):
     try:
         datas += collect_data_files(pkg)
     except Exception:
@@ -33,9 +37,8 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name="WillpoVoice",
     debug=False,
     bootloader_ignore_signals=False,
@@ -43,6 +46,14 @@ exe = EXE(
     upx=False,
     console=False,
     icon="assets/icons/app.ico",
+)
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    name="WillpoVoice",
 )
 
 

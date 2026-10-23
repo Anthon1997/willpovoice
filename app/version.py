@@ -1,4 +1,4 @@
-APP_VERSION = "1.4.0"
+APP_VERSION = "1.5.0"
 # Tu repo de GitHub: "usuario/WillpoVoice" (vacio = sin chequeo)
 GITHUB_REPO = "Anthon1997/willpovoice"
 
