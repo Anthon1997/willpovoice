@@ -47,3 +47,7 @@ _models_backup/
 voices/previews/
 *.bak_*
 diag_*.txt
+models/pocket_tts/
+*.exe
+willpovoice_boot.log
+*.pyc
