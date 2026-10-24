@@ -1,0 +1,221 @@
+"""
+MOTOR DE CLONACION DE VOZ - POCKET TTS (100% LOCAL / OFFLINE)
+=============================================================
+El motor completo viaja empaquetado en models/pocket_tts/ dentro del instalador.
+NO requiere red, NO requiere token de Hugging Face en runtime.
+"""
+import os
+import sys
+import logging
+import tempfile
+from pathlib import Path
+import numpy as np
+import scipy.io.wavfile as wavfile
+
+# 1. Forzar UTF-8 global (Windows abre YAML con cp1252 por defecto)
+os.environ["PYTHONUTF8"] = "1"
+os.environ["PYTHONIOENCODING"] = "utf-8"
+
+# 2. Apuntar HF_HOME a nuestra carpeta local empaquetada y activar modo offline
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+LOCAL_HF_HOME = PROJECT_ROOT / "models" / "pocket_tts"
+os.environ["HF_HOME"] = str(LOCAL_HF_HOME)
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+
+# Desactivar logs innecesarios
+logging.getLogger("transformers").setLevel(logging.ERROR)
+logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+
+# 3. Wrapper temporal de open() para forzar UTF-8 al leer YAML de la libreria
+import builtins as _builtins
+_real_open = _builtins.open
+def _utf8_open(file, mode="r", *args, **kwargs):
+    if "b" not in mode and "encoding" not in kwargs:
+        kwargs["encoding"] = "utf-8"
+    return _real_open(file, mode, *args, **kwargs)
+
+
+class PocketCloner:
+    def __init__(self):
+        self.model = None
+        self.current_lang = None
+
+    def is_available(self) -> bool:
+        """True si el motor empaquetado existe en disco."""
+        ck = LOCAL_HF_HOME / "hub" / "models--kyutai--pocket-tts" / "snapshots" / "3e82814a68665eec246ff649b14c71331f955c06" / "languages" / "spanish" / "model.safetensors"
+        return ck.exists()
+
+    def _load_model(self, language="spanish"):
+        """Carga el modelo 100% desde archivos locales en modo offline."""
+        if self.model is not None and self.current_lang == language:
+            return
+
+        if not self.is_available():
+            raise FileNotFoundError(
+                "El motor de clonacion de voz no esta instalado. "
+                "Contacte al soporte para verificar la instalacion."
+            )
+
+        print(f"🔄 Cargando modelo Pocket TTS ({language}) en modo 100% offline...")
+        
+        _builtins.open = _utf8_open
+        try:
+            from pocket_tts import TTSModel
+            # La libreria resolvera los pesos y tokenizer desde HF_HOME local
+            self.model = TTSModel.load_model(language=language)
+            self.current_lang = language
+        finally:
+            _builtins.open = _real_open
+            
+        print(f"✅ Modelo {language} cargado exitosamente (sin red, sin token).")
+
+    def clone_and_generate(self, audio_wav_path: str, text: str, language: str = "spanish") -> str:
+        """Clona la voz del audio WAV y genera el texto. Retorna ruta del WAV."""
+        if not Path(audio_wav_path).exists():
+            raise FileNotFoundError(f"El audio de referencia no existe: {audio_wav_path}")
+        if not audio_wav_path.lower().endswith(".wav"):
+            raise ValueError("Solo se admiten archivos de audio en formato WAV.")
+
+        self._load_model(language)
+
+        print(f"🎤 Extrayendo huella vocal de: {Path(audio_wav_path).name}")
+        _builtins.open = _utf8_open
+        try:
+            voice_state = self.model.get_state_for_audio_prompt(audio_wav_path)
+        finally:
+            _builtins.open = _real_open
+
+        print(f"🔄 Generando audio ({len(text)} caracteres)...")
+        audio_tensor = self.model.generate_audio(
+            model_state=voice_state,
+            text_to_generate=text,
+            frames_after_eos=2,
+            copy_state=True,
+        )
+
+        output_path = tempfile.mktemp(suffix="_cloned.wav")
+        sample_rate = self.model.sample_rate
+        audio_np = audio_tensor.numpy().T
+        audio_np = np.int16(audio_np / np.max(np.abs(audio_np)) * 32767)
+        wavfile.write(output_path, sample_rate, audio_np)
+
+        print(f"💾 Audio clonado guardado en: {output_path}")
+        return output_path
+
+
+
+    # ------------------------------------------------------------------
+    # BIBLIOTECA DE HUELLAS VOCALES (voces clonadas reutilizables)
+    # ------------------------------------------------------------------
+    def voices_dir(self) -> Path:
+        d = PROJECT_ROOT / "voices"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def list_saved_voices(self):
+        """Nombres de huellas vocales guardadas (sin extension)"""
+        return sorted(p.stem for p in self.voices_dir().glob("*.safetensors"))
+
+    def save_voice_state(self, audio_wav_path: str, name: str) -> str:
+        """Extrae y guarda la huella vocal como .safetensors reutilizable"""
+        self._load_model("spanish")
+        _builtins.open = _utf8_open
+        try:
+            state = self.model.get_state_for_audio_prompt(audio_wav_path)
+        finally:
+            _builtins.open = _real_open
+        
+        out_path = self.voices_dir() / f"{name}.safetensors"
+        try:
+            from safetensors.torch import save_file
+            sd = None
+            if hasattr(state, "save"):
+                state.save(str(out_path))
+                print(f"🧬 Huella vocal guardada (método save): {out_path.name}")
+                return str(out_path)
+            if hasattr(state, "state_dict"):
+                sd = state.state_dict()
+            elif isinstance(state, dict):
+                sd = state
+            elif hasattr(state, "shape"):
+                sd = {"weight": state}
+            elif hasattr(state, "__dict__"):
+                sd = {k: v for k, v in vars(state).items() if hasattr(v, "shape")}
+            
+            if sd and isinstance(sd, dict):
+                # Aplanar diccionarios anidados (safetensors exige tensores directos)
+                def _flatten_state_dict(d, prefix=""):
+                    flat = {}
+                    for k, v in d.items():
+                        new_key = f"{prefix}.{k}" if prefix else k
+                        if isinstance(v, dict):
+                            flat.update(_flatten_state_dict(v, new_key))
+                        else:
+                            flat[new_key] = v
+                    return flat
+                sd = _flatten_state_dict(sd)
+                save_file(sd, str(out_path))
+                print(f"🧬 Huella vocal guardada (aplanada): {out_path.name}")
+            else:
+                print(f"⚠️  No se pudo extraer state_dict de {type(state)}")
+        except Exception as e:
+            print(f"⚠️  No se pudo guardar la huella vocal: {e}")
+        return str(out_path)
+
+    def load_voice_state(self, name: str):
+        """Carga una huella vocal guardada y reconstruye el diccionario exacto"""
+        path = self.voices_dir() / f"{name}.safetensors"
+        self._load_model("spanish")
+        try:
+            from safetensors.torch import load_file
+            flat_dict = load_file(str(path))
+            print(f" Huella vocal cargada: {len(flat_dict)} tensores")
+            
+            # Reconstruir la estructura exacta que devuelve get_state_for_audio_prompt:
+            # {"transformer.layers.X.self_attn": {"offset": tensor, "pad": tensor, "cache": tensor}}
+            nested = {}
+            for key, tensor in flat_dict.items():
+                parts = key.split(".")
+                if len(parts) >= 5 and parts[0] == "transformer" and parts[1] == "layers":
+                    layer_idx = parts[2]
+                    sub_module = parts[3]  # ej: self_attn
+                    attr = parts[4]        # ej: offset, pad, cache
+                    group_key = f"transformer.layers.{layer_idx}.{sub_module}"
+                    if group_key not in nested:
+                        nested[group_key] = {}
+                    nested[group_key][attr] = tensor
+                else:
+                    nested[key] = tensor
+            
+            print(f"✅ Estructura reconstruida con {len(nested)} grupos")
+            return nested
+        except Exception as e:
+            print(f"⚠️  Error al cargar estado: {e}")
+            return None
+
+    def generate_with_voice(self, name: str, text: str) -> str:
+        """Genera audio directamente desde una huella guardada (sin WAV)"""
+        state = self.load_voice_state(name)
+        if state is None:
+            raise ValueError(f"No se pudo cargar la huella vocal: {name}")
+        _builtins.open = _utf8_open
+        try:
+            audio_tensor = self.model.generate_audio(
+                model_state=state,
+                text_to_generate=text,
+                frames_after_eos=2,
+                copy_state=True,
+            )
+        finally:
+            _builtins.open = _real_open
+        
+        output_path = tempfile.mktemp(suffix="_cloned.wav")
+        audio_np = audio_tensor.numpy().T
+        audio_np = np.int16(audio_np / np.max(np.abs(audio_np)) * 32767)
+        wavfile.write(output_path, self.model.sample_rate, audio_np)
+        print(f"💾 Audio generado desde huella '{name}': {output_path}")
+        return output_path
+
+# Instancia global para reutilizar el modelo en memoria
+cloner_instance = PocketCloner()

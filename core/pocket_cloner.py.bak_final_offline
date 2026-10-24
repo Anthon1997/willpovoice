@@ -1,0 +1,135 @@
+"""
+MOTOR DE CLONACION DE VOZ - POCKET TTS (100% LOCAL)
+===================================================
+El motor completo (config + tokenizer + pesos) vive en models/pocket_tts/
+dentro del proyecto. NO usa Hugging Face, NO requiere autentificacion,
+NO requiere red. En desarrollo carga desde el disco; en EXE compilado
+viaja empaquetado en el instalador.
+
+Idiomas: espanol e ingles. Formato de entrada: solo WAV.
+"""
+import os
+# Forzar UTF-8 global (Windows abre YAML con cp1252 por defecto)
+os.environ["PYTHONUTF8"] = "1"
+os.environ["PYTHONIOENCODING"] = "utf-8"
+
+import sys
+import logging
+import tempfile
+from pathlib import Path
+import numpy as np
+import scipy.io.wavfile as wavfile
+
+# Desactivar logs de transformers/afectados
+logging.getLogger("transformers").setLevel(logging.ERROR)
+logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+
+# Rutas locales al motor empaquetado
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+MOTOR_DIR = PROJECT_ROOT / "models" / "pocket_tts"
+
+# Wrapper temporal de open() para forzar UTF-8 al leer YAML de la libreria
+import builtins as _builtins
+_real_open = _builtins.open
+def _utf8_open(file, mode="r", *args, **kwargs):
+    if "b" not in mode and "encoding" not in kwargs:
+        kwargs["encoding"] = "utf-8"
+    return _real_open(file, mode, *args, **kwargs)
+
+
+def _find_config_path(language="spanish"):
+    """Localiza config.yaml del idioma dentro del motor empaquetado."""
+    for cand in (
+        MOTOR_DIR / "languages" / language / "config.yaml",
+        MOTOR_DIR / "config.yaml",
+        MOTOR_DIR / "models" / "config.yaml",
+    ):
+        if cand.exists():
+            return cand
+    # Busqueda recursiva como fallback (primero del idioma pedido)
+    matches = list(MOTOR_DIR.rglob(f"languages/{language}/config.yaml"))
+    if not matches:
+        matches = list(MOTOR_DIR.rglob("config.yaml"))
+    return matches[0] if matches else None
+
+
+def _find_checkpoint_path(language: str) -> Path:
+    """Localiza el safetensors del idioma dentro del motor empaquetado."""
+    cand = MOTOR_DIR / "languages" / language / "model.safetensors"
+    if cand.exists():
+        return cand
+    raise FileNotFoundError(
+        f"No se encontro el checkpoint de {language} en {cand}. "
+        f"El motor empaquetado parece incompleto."
+    )
+
+
+class PocketCloner:
+    def __init__(self):
+        self.model = None
+        self.current_lang = None
+
+    def is_available(self) -> bool:
+        """True si el motor empaquetado tiene el checkpoint en disco."""
+        return (MOTOR_DIR / "languages" / "spanish" / "model.safetensors").exists()
+
+    def _load_model(self, language="spanish"):
+        """Carga el modelo 100% desde archivos locales."""
+        if self.model is not None and self.current_lang == language:
+            return
+
+        cfg_path = _find_config_path(language)
+        ck_path = _find_checkpoint_path(language)
+
+        print(f"🔄 Cargando modelo Pocket TTS ({language}) desde disco...")
+        print(f"   config:     {cfg_path.name if cfg_path else '(default del paquete)'}")
+        print(f"   checkpoint: {ck_path.name}")
+
+        _builtins.open = _utf8_open
+        try:
+            from pocket_tts import TTSModel
+            kwargs = {"language": language, "checkpoint": str(ck_path)}
+            if cfg_path is not None:
+                kwargs["config"] = str(cfg_path)
+            self.model = TTSModel.load_model(**kwargs)
+            self.current_lang = language
+        finally:
+            _builtins.open = _real_open
+        print(f"✅ Modelo {language} cargado exitosamente (100% offline).")
+
+    def clone_and_generate(self, audio_wav_path: str, text: str, language: str = "spanish") -> str:
+        """Clona la voz del audio WAV y genera el texto. Retorna ruta del WAV."""
+        if not Path(audio_wav_path).exists():
+            raise FileNotFoundError(f"El audio de referencia no existe: {audio_wav_path}")
+        if not audio_wav_path.lower().endswith(".wav"):
+            raise ValueError("Solo se admiten archivos de audio en formato WAV.")
+
+        self._load_model(language)
+
+        print(f"🎤 Extrayendo huella vocal de: {Path(audio_wav_path).name}")
+        _builtins.open = _utf8_open
+        try:
+            voice_state = self.model.get_state_for_audio_prompt(audio_wav_path)
+        finally:
+            _builtins.open = _real_open
+
+        print(f"🔄 Generando audio ({len(text)} caracteres)...")
+        audio_tensor = self.model.generate_audio(
+            model_state=voice_state,
+            text_to_generate=text,
+            frames_after_eos=2,
+            copy_state=True,
+        )
+
+        output_path = tempfile.mktemp(suffix="_cloned.wav")
+        sample_rate = self.model.sample_rate
+        audio_np = audio_tensor.numpy().T
+        audio_np = np.int16(audio_np / np.max(np.abs(audio_np)) * 32767)
+        wavfile.write(output_path, sample_rate, audio_np)
+
+        print(f"💾 Audio clonado guardado en: {output_path}")
+        return output_path
+
+
+# Instancia global para reutilizar el modelo en memoria
+cloner_instance = PocketCloner()

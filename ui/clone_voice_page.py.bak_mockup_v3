@@ -1,0 +1,928 @@
+"""
+Página de Clonación de Voz - Réplica exacta del mockup
+Diseño: Header con ondas, cards con glassmorphism, iconos vectoriales QPainter
+"""
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QTextEdit, QFileDialog, QFrame, QComboBox, QProgressBar,
+    QScrollArea, QSizePolicy, QSlider, QToolButton, QGraphicsDropShadowEffect
+)
+from PySide6.QtCore import Qt, QSize, QTimer, Signal, QObject
+from PySide6.QtGui import (
+    QFont, QPixmap, QPainter, QColor, QLinearGradient, QBrush,
+    QPen, QRadialGradient, QPainterPath, QIcon
+)
+import os
+
+# Paleta de colores del mockup
+BG_APP = "#0a0e1a"
+BG_HEADER = "#0d1224"
+BG_CARD = "#111827"
+BG_CARD_ALT = "#0f1629"
+BG_INPUT = "#0b1120"
+BORDER = "#1e2942"
+BORDER_LIGHT = "#2a3a5c"
+TEXT_PRIMARY = "#ffffff"
+TEXT_SECONDARY = "#94a3b8"
+TEXT_MUTED = "#64748b"
+ACCENT_PURPLE = "#8b5cf6"
+ACCENT_BLUE = "#3b82f6"
+ACCENT_CYAN = "#06b6d4"
+SUCCESS = "#10b981"
+
+# Worker para clonación en segundo plano
+class CloneWorker(QObject):
+    finished = Signal(str)
+    error = Signal(str)
+    progress = Signal(str)
+
+    def __init__(self, wav_path, text, language, speed):
+        super().__init__()
+        self.wav_path = wav_path
+        self.text = text
+        self.language = language
+        self.speed = speed
+
+
+class CloneVoicePage(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet(f"background: {BG_APP};")
+        self._wav_path = None
+        self._clone_worker = None
+        self._build_ui()
+
+    def _build_ui(self):
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("background: transparent; border: none;")
+
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(32, 24, 32, 40)
+        content_layout.setSpacing(20)
+
+        # 1. HEADER
+        content_layout.addWidget(self._build_header())
+
+        # 2. CARD: Audio de referencia
+        content_layout.addWidget(self._build_audio_card())
+
+        # 3. CARD: Configuración de voz
+        content_layout.addWidget(self._build_config_card())
+
+        # 4. CARD: Texto para generar
+        content_layout.addWidget(self._build_text_card())
+
+        # 5. BOTÓN PRINCIPAL
+        content_layout.addWidget(self._build_main_button())
+
+        content_layout.addStretch()
+        scroll.setWidget(content)
+        main_layout.addWidget(scroll)
+
+    # ------------------------------------------------------------------
+    # HEADER
+    # ------------------------------------------------------------------
+    def _build_header(self):
+        header = QFrame()
+        header.setFixedHeight(110)
+        header.setStyleSheet(f"""
+            QFrame {{
+                background: {BG_HEADER};
+                border-radius: 16px;
+                border: 1px solid {BORDER};
+            }}
+        """)
+
+        # Efecto de ondas de fondo
+        header.paintEvent = self._header_paint_event
+
+        layout = QHBoxLayout(header)
+        layout.setContentsMargins(28, 20, 28, 20)
+        layout.setSpacing(20)
+
+        # Icono circular de ondas
+        icon_label = QLabel()
+        icon_label.setPixmap(self._make_wave_circle_icon(48))
+        icon_label.setFixedSize(56, 56)
+        layout.addWidget(icon_label)
+
+        # Título + subtítulo
+        title_col = QVBoxLayout()
+        title_col.setSpacing(4)
+
+        title_row = QHBoxLayout()
+        title_row.setSpacing(12)
+        title = QLabel("Clonación de Voz")
+        title.setStyleSheet(f"""
+            color: {TEXT_PRIMARY};
+            font-size: 26px;
+            font-weight: 700;
+        """)
+        title_row.addWidget(title)
+
+        badge = QLabel("NUEVO")
+        badge.setStyleSheet(f"""
+            background: {ACCENT_PURPLE};
+            color: white;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1px;
+        """)
+        badge.setFixedHeight(24)
+        title_row.addWidget(badge)
+        title_row.addStretch()
+        title_col.addLayout(title_row)
+
+        subtitle = QLabel("Crea una voz personalizada a partir de una muestra de audio.")
+        subtitle.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 14px;")
+        title_col.addWidget(subtitle)
+        layout.addLayout(title_col, 1)
+
+        # Status indicator
+        status = QFrame()
+        status.setStyleSheet(f"""
+            QFrame {{
+                background: rgba(16, 185, 129, 0.08);
+                border: 1px solid rgba(16, 185, 129, 0.25);
+                border-radius: 20px;
+            }}
+        """)
+        status_layout = QHBoxLayout(status)
+        status_layout.setContentsMargins(14, 8, 14, 8)
+        status_layout.setSpacing(8)
+
+        dot = QLabel()
+        dot.setPixmap(self._make_dot_icon(8, SUCCESS))
+        dot.setFixedSize(8, 8)
+        status_layout.addWidget(dot)
+
+        status_text = QLabel("Sistema listo")
+        status_text.setStyleSheet(f"color: {SUCCESS}; font-size: 13px; font-weight: 500;")
+        status_layout.addWidget(status_text)
+
+        layout.addWidget(status)
+        return header
+
+    def _header_paint_event(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.fillRect(self.rect(), QColor(BG_HEADER))
+
+        # Ondas decorativas en el fondo
+        painter.setPen(Qt.PenStyle.NoPen)
+        for i in range(3):
+            path = QPainterPath()
+            y_offset = 30 + i * 15
+            alpha = 40 - i * 10
+            color = QColor(ACCENT_BLUE)
+            color.setAlpha(alpha)
+            painter.setBrush(QBrush(color))
+
+            path.moveTo(0, y_offset)
+            for x in range(0, self.width(), 5):
+                y = y_offset + 20 * (0.5 + 0.5 * __import__("math").sin(x * 0.015 + i))
+                path.lineTo(x, y)
+            path.lineTo(self.width(), self.height())
+            path.lineTo(0, self.height())
+            path.closeSubpath()
+            painter.drawPath(path)
+        painter.end()
+
+    # ------------------------------------------------------------------
+    # CARD: AUDIO DE REFERENCIA
+    # ------------------------------------------------------------------
+    def _build_audio_card(self):
+        card = QFrame()
+        card.setStyleSheet(f"""
+            QFrame {{
+                background: {BG_CARD};
+                border-radius: 16px;
+                border: 1px solid {BORDER};
+            }}
+        """)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(24, 20, 24, 24)
+        layout.setSpacing(14)
+
+        # Header de card
+        header = QHBoxLayout()
+        header.setSpacing(12)
+        icon = QLabel()
+        icon.setPixmap(self._make_small_icon("wave", 28))
+        icon.setFixedSize(32, 32)
+        header.addWidget(icon)
+
+        title = QLabel("Audio de referencia")
+        title.setStyleSheet(f"color: {TEXT_PRIMARY}; font-size: 18px; font-weight: 600;")
+        header.addWidget(title)
+        header.addStretch()
+        layout.addLayout(header)
+
+        subtitle = QLabel("Sube un archivo de audio con la voz que quieres clonar.")
+        subtitle.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 13px;")
+        layout.addWidget(subtitle)
+
+        # Contenedor: drop zone + preview (dos columnas)
+        row = QHBoxLayout()
+        row.setSpacing(16)
+
+        self.drop_zone = self._build_drop_zone()
+        row.addWidget(self.drop_zone, 1)
+
+        self.file_preview = self._build_file_preview()
+        self.file_preview.hide()
+        row.addWidget(self.file_preview, 1)
+
+        layout.addLayout(row)
+
+        # Footer specs
+        specs = QHBoxLayout()
+        specs.setSpacing(8)
+        for text in ["Formatos soportados: WAV (recomendado)", "Máx. 10 MB", "Duración recomendada: 5s - 60s"]:
+            lbl = QLabel(f" {text}")
+            lbl.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px;")
+            specs.addWidget(lbl)
+            sep = QLabel("|")
+            sep.setStyleSheet(f"color: {BORDER}; font-size: 11px;")
+            specs.addWidget(sep)
+        specs.takeAt(specs.count() - 1)  # quitar último separador
+        specs.addStretch()
+        layout.addLayout(specs)
+
+        return card
+
+    def _build_drop_zone(self):
+        zone = QFrame()
+        zone.setFixedHeight(220)
+        zone.setStyleSheet(f"""
+            QFrame {{
+                background: {BG_CARD_ALT};
+                border: 2px dashed {BORDER_LIGHT};
+                border-radius: 12px;
+            }}
+        """)
+        layout = QVBoxLayout(zone)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(12)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        icon = QLabel()
+        icon.setPixmap(self._make_music_icon(56))
+        icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon.setFixedSize(64, 64)
+        layout.addWidget(icon)
+
+        t1 = QLabel("Arrastra tu audio aquí")
+        t1.setStyleSheet(f"color: {TEXT_PRIMARY}; font-size: 16px; font-weight: 600;")
+        t1.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(t1)
+
+        t2 = QLabel("o selecciona un archivo desde tu equipo")
+        t2.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 13px;")
+        t2.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(t2)
+
+        btn = QPushButton(" Seleccionar audio")
+        btn.setFixedHeight(44)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setStyleSheet(f"""
+            QPushButton {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 {ACCENT_BLUE}, stop:1 {ACCENT_PURPLE});
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-size: 14px;
+                font-weight: 600;
+                padding: 0 24px;
+            }}
+            QPushButton:hover {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #2563eb, stop:1 #7c3aed);
+            }}
+            QPushButton:pressed {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #1d4ed8, stop:1 #6d28d9);
+            }}
+        """)
+        btn.clicked.connect(self._select_audio)
+        layout.addWidget(btn)
+
+        return zone
+
+    def _build_file_preview(self):
+        preview = QFrame()
+        preview.setFixedHeight(220)
+        preview.setStyleSheet(f"""
+            QFrame {{
+                background: {BG_CARD_ALT};
+                border: 1px solid {BORDER_LIGHT};
+                border-radius: 12px;
+            }}
+        """)
+        layout = QVBoxLayout(preview)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
+
+        # Header: icono + info + botones
+        header = QHBoxLayout()
+        header.setSpacing(12)
+
+        icon = QLabel()
+        icon.setPixmap(self._make_file_icon(36))
+        icon.setFixedSize(40, 40)
+        header.addWidget(icon)
+
+        info = QVBoxLayout()
+        info.setSpacing(2)
+        self.preview_name = QLabel("mi_voz.wav")
+        self.preview_name.setStyleSheet(f"color: {TEXT_PRIMARY}; font-size: 15px; font-weight: 600;")
+        info.addWidget(self.preview_name)
+        self.preview_meta = QLabel("WAV  12.4 MB  00:18")
+        self.preview_meta.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px;")
+        info.addWidget(self.preview_meta)
+        header.addLayout(info, 1)
+
+        # Botones acción
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(6)
+
+        reload_btn = QToolButton()
+        reload_btn.setText("↻")
+        reload_btn.setFixedSize(32, 32)
+        reload_btn.setStyleSheet(f"""
+            QToolButton {{
+                background: {BG_CARD};
+                border: 1px solid {BORDER};
+                border-radius: 8px;
+                color: {TEXT_SECONDARY};
+                font-size: 16px;
+            }}
+            QToolButton:hover {{
+                background: {BORDER_LIGHT};
+                color: {TEXT_PRIMARY};
+            }}
+        """)
+        reload_btn.clicked.connect(self._select_audio)
+        btn_row.addWidget(reload_btn)
+
+        delete_btn = QToolButton()
+        delete_btn.setText("🗑")
+        delete_btn.setFixedSize(32, 32)
+        delete_btn.setStyleSheet(f"""
+            QToolButton {{
+                background: {BG_CARD};
+                border: 1px solid {BORDER};
+                border-radius: 8px;
+                color: {TEXT_SECONDARY};
+                font-size: 14px;
+            }}
+            QToolButton:hover {{
+                background: #ef4444;
+                border-color: #dc2626;
+                color: white;
+            }}
+        """)
+        delete_btn.clicked.connect(self._clear_audio)
+        btn_row.addWidget(delete_btn)
+
+        header.addLayout(btn_row)
+        layout.addLayout(header)
+
+        # Reproductor
+        player = QFrame()
+        player.setStyleSheet(f"""
+            QFrame {{
+                background: {BG_CARD};
+                border-radius: 10px;
+                border: 1px solid {BORDER};
+            }}
+        """)
+        player_layout = QHBoxLayout(player)
+        player_layout.setContentsMargins(12, 8, 12, 8)
+        player_layout.setSpacing(12)
+
+        play_btn = QToolButton()
+        play_btn.setText("▶")
+        play_btn.setFixedSize(36, 36)
+        play_btn.setStyleSheet(f"""
+            QToolButton {{
+                background: {ACCENT_PURPLE};
+                border: none;
+                border-radius: 18px;
+                color: white;
+                font-size: 14px;
+            }}
+            QToolButton:hover {{
+                background: {ACCENT_BLUE};
+            }}
+        """)
+        player_layout.addWidget(play_btn)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFormat("00:00 / 00:18")
+        self.progress_bar.setFixedHeight(6)
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar {{
+                background: {BG_APP};
+                border: none;
+                border-radius: 3px;
+                text-align: center;
+                color: {TEXT_MUTED};
+                font-size: 10px;
+            }}
+            QProgressBar::chunk {{
+                background: {ACCENT_PURPLE};
+                border-radius: 3px;
+            }}
+        """)
+        player_layout.addWidget(self.progress_bar, 1)
+
+        layout.addWidget(player)
+        return preview
+
+    # ------------------------------------------------------------------
+    # CARD: CONFIGURACIÓN DE VOZ
+    # ------------------------------------------------------------------
+    def _build_config_card(self):
+        card = QFrame()
+        card.setStyleSheet(f"""
+            QFrame {{
+                background: {BG_CARD};
+                border-radius: 16px;
+                border: 1px solid {BORDER};
+            }}
+        """)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(24, 20, 24, 24)
+        layout.setSpacing(14)
+
+        header = QHBoxLayout()
+        header.setSpacing(12)
+        icon = QLabel()
+        icon.setPixmap(self._make_small_icon("gear", 28))
+        icon.setFixedSize(32, 32)
+        header.addWidget(icon)
+        title = QLabel("Configuración de voz")
+        title.setStyleSheet(f"color: {TEXT_PRIMARY}; font-size: 18px; font-weight: 600;")
+        header.addWidget(title)
+        header.addStretch()
+        layout.addLayout(header)
+
+        subtitle = QLabel("Selecciona el idioma y la variante de la voz para la clonación.")
+        subtitle.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 13px;")
+        layout.addWidget(subtitle)
+
+        # 3 columnas: Idioma | Variante | Opciones avanzadas
+        row = QHBoxLayout()
+        row.setSpacing(14)
+
+        # Columna 1: Idioma
+        col1 = QVBoxLayout()
+        col1.setSpacing(6)
+        lbl1 = QLabel("Idioma")
+        lbl1.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 13px; font-weight: 500;")
+        col1.addWidget(lbl1)
+        self.lang_combo = QComboBox()
+        self.lang_combo.addItem("Español (España)")
+        self.lang_combo.setStyleSheet(self._combo_style())
+        self.lang_combo.setFixedHeight(44)
+        col1.addWidget(self.lang_combo)
+        row.addLayout(col1, 1)
+
+        # Columna 2: Variante regional
+        col2 = QVBoxLayout()
+        col2.setSpacing(6)
+        lbl2 = QLabel("Variante regional")
+        lbl2.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 13px; font-weight: 500;")
+        col2.addWidget(lbl2)
+        self.variant_combo = QComboBox()
+        self.variant_combo.addItem("Español (España)")
+        self.variant_combo.setStyleSheet(self._combo_style())
+        self.variant_combo.setFixedHeight(44)
+        col2.addWidget(self.variant_combo)
+        row.addLayout(col2, 1)
+
+        # Columna 3: Opciones avanzadas (dropdown con slider)
+        col3 = QVBoxLayout()
+        col3.setSpacing(6)
+        lbl3 = QLabel("Opciones avanzadas")
+        lbl3.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 13px; font-weight: 500;")
+        col3.addWidget(lbl3)
+
+        self.advanced_toggle = QComboBox()
+        self.advanced_toggle.addItem("Opciones avanzadas")
+        self.advanced_toggle.setStyleSheet(self._combo_style())
+        self.advanced_toggle.setFixedHeight(44)
+        self.advanced_toggle.currentIndexChanged.connect(self._toggle_advanced)
+        col3.addWidget(self.advanced_toggle)
+
+        # Panel de velocidad (oculto por defecto)
+        self.speed_panel = QFrame()
+        self.speed_panel.hide()
+        self.speed_panel.setStyleSheet(f"""
+            QFrame {{
+                background: {BG_CARD_ALT};
+                border: 1px solid {BORDER};
+                border-radius: 10px;
+                padding: 12px;
+            }}
+        """)
+        speed_layout = QVBoxLayout(self.speed_panel)
+        speed_layout.setContentsMargins(12, 10, 12, 10)
+        speed_layout.setSpacing(8)
+
+        self.speed_slider = QSlider(Qt.Orientation.Horizontal)
+        self.speed_slider.setRange(50, 200)
+        self.speed_slider.setValue(100)
+        self.speed_slider.setStyleSheet(f"""
+            QSlider::groove:horizontal {{
+                background: {BG_APP};
+                border: 1px solid {BORDER};
+                height: 6px;
+                border-radius: 3px;
+            }}
+            QSlider::handle:horizontal {{
+                background: {ACCENT_PURPLE};
+                border: 2px solid {ACCENT_PURPLE};
+                width: 18px;
+                margin: -7px 0;
+                border-radius: 9px;
+            }}
+            QSlider::handle:horizontal:hover {{
+                background: {ACCENT_BLUE};
+            }}
+            QSlider::sub-page:horizontal {{
+                background: {ACCENT_PURPLE};
+                border-radius: 3px;
+            }}
+        """)
+        speed_layout.addWidget(self.speed_slider)
+
+        self.speed_label = QLabel("Velocidad: 1.0x")
+        self.speed_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px;")
+        speed_layout.addWidget(self.speed_label)
+
+        self.speed_slider.valueChanged.connect(self._update_speed_label)
+        col3.addWidget(self.speed_panel)
+
+        row.addLayout(col3, 1)
+        layout.addLayout(row)
+
+        return card
+
+    def _combo_style(self):
+        return f"""
+            QComboBox {{
+                background: {BG_INPUT};
+                border: 1px solid {BORDER};
+                border-radius: 10px;
+                padding: 0 14px;
+                color: {TEXT_PRIMARY};
+                font-size: 14px;
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: 30px;
+            }}
+            QComboBox::down-arrow {{
+                image: none;
+            }}
+            QComboBox QAbstractItemView {{
+                background: {BG_INPUT};
+                border: 1px solid {BORDER};
+                border-radius: 8px;
+                selection-background-color: {ACCENT_PURPLE};
+                color: {TEXT_PRIMARY};
+                padding: 6px;
+            }}
+        """
+
+    def _toggle_advanced(self, index):
+        if index == 1:
+            self.speed_panel.show()
+        else:
+            self.speed_panel.hide()
+
+    def _update_speed_label(self, value):
+        speed = value / 100
+        self.speed_label.setText(f"Velocidad: {speed:.1f}x")
+
+    # ------------------------------------------------------------------
+    # CARD: TEXTO PARA GENERAR
+    # ------------------------------------------------------------------
+    def _build_text_card(self):
+        card = QFrame()
+        card.setStyleSheet(f"""
+            QFrame {{
+                background: {BG_CARD};
+                border-radius: 16px;
+                border: 1px solid {BORDER};
+            }}
+        """)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(24, 20, 24, 24)
+        layout.setSpacing(14)
+
+        header = QHBoxLayout()
+        header.setSpacing(12)
+        icon = QLabel()
+        icon.setPixmap(self._make_small_icon("doc", 28))
+        icon.setFixedSize(32, 32)
+        header.addWidget(icon)
+        title = QLabel("Texto para generar")
+        title.setStyleSheet(f"color: {TEXT_PRIMARY}; font-size: 18px; font-weight: 600;")
+        header.addWidget(title)
+        header.addStretch()
+        layout.addLayout(header)
+
+        subtitle = QLabel("Escribe el texto que quieres convertir en voz con la voz clonada.")
+        subtitle.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 13px;")
+        layout.addWidget(subtitle)
+
+        self.text_area = QTextEdit()
+        self.text_area.setPlaceholderText("Escribe aquí el texto que quieres escuchar con la voz seleccionada...")
+        self.text_area.setStyleSheet(f"""
+            QTextEdit {{
+                background: {BG_INPUT};
+                border: 1px solid {BORDER};
+                border-radius: 10px;
+                padding: 16px;
+                color: {TEXT_PRIMARY};
+                font-size: 14px;
+                min-height: 140px;
+                selection-background-color: {ACCENT_PURPLE};
+            }}
+            QTextEdit:focus {{
+                border-color: {ACCENT_PURPLE};
+            }}
+        """)
+        self.text_area.textChanged.connect(self._update_char_count)
+        layout.addWidget(self.text_area)
+
+        # Footer: contador + botones
+        footer = QHBoxLayout()
+        self.char_counter = QLabel("0 / 5000")
+        self.char_counter.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px;")
+        footer.addWidget(self.char_counter)
+        footer.addStretch()
+
+        paste_btn = QPushButton(" Pegar")
+        paste_btn.setStyleSheet(self._secondary_btn_style())
+        paste_btn.clicked.connect(self._paste_text)
+        footer.addWidget(paste_btn)
+
+        clear_btn = QPushButton(" Limpiar")
+        clear_btn.setStyleSheet(self._secondary_btn_style())
+        clear_btn.clicked.connect(self.text_area.clear)
+        footer.addWidget(clear_btn)
+
+        layout.addLayout(footer)
+        return card
+
+    def _secondary_btn_style(self):
+        return f"""
+            QPushButton {{
+                background: {BG_INPUT};
+                border: 1px solid {BORDER};
+                border-radius: 8px;
+                color: {TEXT_SECONDARY};
+                padding: 8px 16px;
+                font-size: 13px;
+            }}
+            QPushButton:hover {{
+                background: {BORDER_LIGHT};
+                color: {TEXT_PRIMARY};
+            }}
+        """
+
+    def _update_char_count(self):
+        n = len(self.text_area.toPlainText())
+        self.char_counter.setText(f"{n} / 5000")
+
+    def _paste_text(self):
+        from PySide6.QtWidgets import QApplication
+        clipboard = QApplication.clipboard()
+        self.text_area.insertPlainText(clipboard.text())
+
+    # ------------------------------------------------------------------
+    # BOTÓN PRINCIPAL
+    # ------------------------------------------------------------------
+    def _build_main_button(self):
+        btn = QPushButton(" Clonar y Generar Audio")
+        btn.setFixedHeight(56)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setStyleSheet(f"""
+            QPushButton {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 {ACCENT_BLUE}, stop:1 {ACCENT_PURPLE});
+                color: white;
+                border: none;
+                border-radius: 12px;
+                font-size: 16px;
+                font-weight: 600;
+                padding: 0 24px;
+            }}
+            QPushButton:hover {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #2563eb, stop:1 #7c3aed);
+            }}
+            QPushButton:pressed {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #1d4ed8, stop:1 #6d28d9);
+            }}
+            QPushButton:disabled {{
+                background: {BORDER};
+                color: {TEXT_MUTED};
+            }}
+        """)
+        btn.clicked.connect(self._start_cloning)
+        return btn
+
+    # ------------------------------------------------------------------
+    # ICONOS VECTORIALES (QPainter)
+    # ------------------------------------------------------------------
+    def _make_wave_circle_icon(self, size):
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pixmap)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Círculo con glow
+        grad = QRadialGradient(size/2, size/2, size/2)
+        grad.setColorAt(0, QColor(ACCENT_BLUE))
+        grad.setColorAt(1, QColor(ACCENT_PURPLE))
+        p.setBrush(QBrush(grad))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawEllipse(2, 2, size-4, size-4)
+
+        # Ondas blancas
+        p.setPen(QPen(QColor("white"), 2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        cx, cy = size/2, size/2
+        for i, h in enumerate([10, 16, 22, 16, 10]):
+            x = cx - 20 + i * 10
+            p.drawLine(x, cy - h/2, x, cy + h/2)
+
+        p.end()
+        return pixmap
+
+    def _make_dot_icon(self, size, color):
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pixmap)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setBrush(QBrush(QColor(color)))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawEllipse(0, 0, size, size)
+        p.end()
+        return pixmap
+
+    def _make_small_icon(self, kind, size):
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pixmap)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        if kind == "wave":
+            grad = QLinearGradient(0, 0, size, size)
+            grad.setColorAt(0, QColor(ACCENT_BLUE))
+            grad.setColorAt(1, QColor(ACCENT_PURPLE))
+            p.setBrush(QBrush(grad))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawRoundedRect(2, 2, size-4, size-4, 6, 6)
+            p.setPen(QPen(QColor("white"), 1.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            cx, cy = size/2, size/2
+            for i, h in enumerate([6, 10, 14, 10, 6]):
+                x = cx - 12 + i * 6
+                p.drawLine(x, cy - h/2, x, cy + h/2)
+        elif kind == "gear":
+            grad = QLinearGradient(0, 0, size, size)
+            grad.setColorAt(0, QColor(ACCENT_BLUE))
+            grad.setColorAt(1, QColor(ACCENT_PURPLE))
+            p.setBrush(QBrush(grad))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawRoundedRect(2, 2, size-4, size-4, 6, 6)
+            p.setPen(QPen(QColor("white"), 1.5))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawEllipse(8, 8, size-16, size-16)
+            p.drawEllipse(11, 11, size-22, size-22)
+        elif kind == "doc":
+            grad = QLinearGradient(0, 0, size, size)
+            grad.setColorAt(0, QColor(ACCENT_BLUE))
+            grad.setColorAt(1, QColor(ACCENT_PURPLE))
+            p.setBrush(QBrush(grad))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawRoundedRect(2, 2, size-4, size-4, 6, 6)
+            p.setPen(QPen(QColor("white"), 1.2))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawRoundedRect(9, 8, size-18, size-14, 2, 2)
+            for i in range(3):
+                y = 12 + i * 4
+                p.drawLine(11, y, size-11, y)
+
+        p.end()
+        return pixmap
+
+    def _make_music_icon(self, size):
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pixmap)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        grad = QLinearGradient(0, 0, size, size)
+        grad.setColorAt(0, QColor(ACCENT_BLUE))
+        grad.setColorAt(1, QColor(ACCENT_PURPLE))
+        p.setPen(QPen(QBrush(grad), 3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+
+        cx, cy = size/2, size/2
+        p.drawEllipse(int(cx-10), int(cy+4), 14, 14)
+        p.drawLine(int(cx+4), int(cy+10), int(cx+4), int(cy-14))
+        p.drawEllipse(int(cx-4), int(cy-18), 16, 10)
+
+        p.end()
+        return pixmap
+
+    def _make_file_icon(self, size):
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pixmap)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        grad = QLinearGradient(0, 0, size, size)
+        grad.setColorAt(0, QColor(ACCENT_BLUE))
+        grad.setColorAt(1, QColor(ACCENT_PURPLE))
+        p.setBrush(QBrush(grad))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawRoundedRect(2, 2, size-4, size-4, 6, 6)
+
+        p.setPen(QPen(QColor("white"), 1.5))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawRoundedRect(10, 8, size-20, size-16, 2, 2)
+        p.drawEllipse(14, size//2-4, 8, 8)
+        p.drawLine(22, size//2, 22, 12)
+        p.drawEllipse(18, 8, 8, 6)
+
+        p.end()
+        return pixmap
+
+    # ------------------------------------------------------------------
+    # FUNCIONALIDAD
+    # ------------------------------------------------------------------
+    def _select_audio(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Seleccionar Audio", "",
+            "Archivos WAV (*.wav);;Todos los archivos (*)"
+        )
+        if path:
+            self._wav_path = path
+            name = os.path.basename(path)
+            size_mb = os.path.getsize(path) / (1024 * 1024)
+            self.preview_name.setText(name)
+            self.preview_meta.setText(f"WAV  {size_mb:.1f} MB")
+            self.drop_zone.hide()
+            self.file_preview.show()
+            print(f"Audio cargado: {name}")
+
+    def _clear_audio(self):
+        self._wav_path = None
+        self.file_preview.hide()
+        self.drop_zone.show()
+        print("Audio eliminado")
+
+    def _start_cloning(self):
+        if not self._wav_path:
+            print("Selecciona un archivo de audio primero")
+            return
+        text = self.text_area.toPlainText().strip()
+        if not text:
+            print("Escribe el texto a generar")
+            return
+
+        speed = self.speed_slider.value() / 100
+        lang = "spanish"
+        print(f"Iniciando clonación...")
+        print(f"  Audio: {self._wav_path}")
+        print(f"  Texto: {text[:60]}...")
+        print(f"  Velocidad: {speed}x")
+
+        try:
+            from core.pocket_cloner import cloner_instance
+            out = cloner_instance.clone_and_generate(self._wav_path, text, lang)
+            print(f"Audio clonado generado: {out}")
+        except Exception as e:
+            print(f"Error: {e}")

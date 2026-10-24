@@ -1,0 +1,290 @@
+﻿"""
+INTERFAZ DE CLONACIÓN DE VOZ (Pestaña Nueva)
+Diseño basado en el mockup de WillpoVoice v1.4.0
+"""
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
+    QTextEdit, QFileDialog, QFrame, QComboBox, QMessageBox, QProgressBar
+)
+from PySide6.QtCore import Qt, QThread, Signal, QSize, QTimer
+from PySide6.QtGui import QIcon, QFont
+
+# Colores del tema oscuro de WillpoVoice
+BG = "#0b0f1a"
+CARD = "#141b30"
+BORDER = "#232f4b"
+TEXT = "#eef2ff"
+MUTED = "#8b93b0"
+PURPLE = "#8b5cf6"
+TEAL = "#2dd4bf"
+
+class CloneWorker(QThread):
+    finished = Signal(str) # Ruta del archivo
+    error = Signal(str)
+    progress = Signal(str) # Mensajes de estado
+
+    def __init__(self, wav_path, text, language):
+        super().__init__()
+        self.wav_path = wav_path
+        self.text = text
+        self.language = language
+
+    def run(self):
+        try:
+            from core.pocket_cloner import cloner_instance
+            self.progress.emit("Procesando huella vocal...")
+            result_path = cloner_instance.clone_and_generate(
+                self.wav_path, self.text, self.language
+            )
+            self.finished.emit(result_path)
+        except Exception as e:
+            self.error.emit(str(e))
+
+class DownloadWorker(QThread):
+    finished = Signal()
+    error = Signal(str)
+    progress = Signal(str)
+
+    def __init__(self, language="spanish"):
+        super().__init__()
+        self.language = language
+
+    def run(self):
+        try:
+            from core.pocket_cloner import cloner_instance
+            self.progress.emit("Conectando con el servidor...")
+            self.progress.emit("Descargando modelo (~200 MB). Esto puede tomar unos minutos...")
+            cloner_instance.download_model(self.language)
+            self.finished.emit()
+        except Exception as e:
+            self.error.emit(str(e))
+
+class CloneVoicePage(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet(f"background: {BG};")
+        self._wav_path = None
+        self._build_ui()
+
+    def _build_ui(self):
+        from ui.modern_window import make_icon
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(40, 36, 40, 28)
+        layout.setSpacing(20)
+
+        # Header
+        header = QHBoxLayout()
+        icon_lbl = QLabel()
+        icon_lbl.setPixmap(make_icon("robot", "#8b5cf6", 32))
+        title = QLabel("Clonación de Voz")
+        title.setStyleSheet(f"color: {TEXT}; font-size: 26px; font-weight: 800;")
+        badge = QLabel("NUEVO")
+        badge.setStyleSheet("background: #8b5cf6; color: white; font-size: 10px; font-weight: 800; padding: 4px 8px; border-radius: 6px;")
+        
+        header.addWidget(icon_lbl)
+        header.addWidget(title)
+        header.addWidget(badge)
+        header.addStretch(1)
+        layout.addLayout(header)
+
+        subtitle = QLabel("Clona cualquier voz a partir de un audio de referencia (WAV).")
+        subtitle.setStyleSheet(f"color: {MUTED}; font-size: 14px;")
+        layout.addWidget(subtitle)
+
+        # Contenedor de Descarga (Oculto por defecto)
+        self.download_container = QFrame()
+        self.download_container.hide()
+        self.download_container.setStyleSheet(f"background: {CARD}; border: 1px solid {BORDER}; border-radius: 16px;")
+        dl_layout = QVBoxLayout(self.download_container)
+        dl_layout.setContentsMargins(40, 40, 40, 40)
+        dl_layout.setSpacing(20)
+        
+        dl_title = QLabel("⬇️ Descargando Motor de Clonación")
+        dl_title.setStyleSheet(f"color: {TEXT}; font-size: 18px; font-weight: 700;")
+        dl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        dl_layout.addWidget(dl_title)
+        
+        dl_desc = QLabel("Es la primera vez que usas esta función. Descargando el modelo de IA (~200 MB) para uso 100% offline.")
+        dl_desc.setStyleSheet(f"color: {MUTED}; font-size: 13px;")
+        dl_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        dl_desc.setWordWrap(True)
+        dl_layout.addWidget(dl_desc)
+        
+        self.dl_progress = QProgressBar()
+        self.dl_progress.setRange(0, 0)
+        self.dl_progress.setFixedHeight(10)
+        self.dl_progress.setStyleSheet(f"QProgressBar {{ background: #0d1220; border: none; border-radius: 5px; }} QProgressBar::chunk {{ background: {PURPLE}; border-radius: 5px; }}")
+        dl_layout.addWidget(self.dl_progress)
+        layout.addWidget(self.download_container)
+
+        # Contenedor Principal (Card)
+        self.main_container = QFrame()
+        card = self.main_container
+        card.setStyleSheet(f"background: {CARD}; border: 1px solid {BORDER}; border-radius: 16px;")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(24, 24, 24, 24)
+        card_layout.setSpacing(20)
+
+        # Fila 1: Upload WAV + Selector de Idioma
+        row1 = QHBoxLayout()
+        
+        # Upload Button
+        self.btn_upload = QPushButton("📂 Seleccionar Audio WAV")
+        self.btn_upload.setFixedHeight(46)
+        self.btn_upload.setStyleSheet(f"""
+            QPushButton {{ background: #0d1220; color: {TEXT}; border: 1px solid {BORDER}; border-radius: 10px; font-size: 13px; font-weight: 600; }}
+            QPushButton:hover {{ border: 1px solid {PURPLE}; }}
+        """)
+        self.btn_upload.clicked.connect(self._select_wav)
+        row1.addWidget(self.btn_upload, 2)
+
+        # Language Selector
+        self.combo_lang = QComboBox()
+        self.combo_lang.addItems(["Español (España)", "Inglés (EEUU)"])
+        self.combo_lang.setFixedHeight(46)
+        self.combo_lang.setStyleSheet(f"""
+            QComboBox {{ background: #0d1220; color: {TEXT}; border: 1px solid {BORDER}; border-radius: 10px; padding: 0 12px; font-size: 13px; }}
+            QComboBox::drop-down {{ border: none; }}
+        """)
+        row1.addWidget(self.combo_lang, 1)
+        card_layout.addLayout(row1)
+
+        # Fila 2: Área de Texto
+        self.text_edit = QTextEdit()
+        self.text_edit.setPlaceholderText("Escribe aquí el texto que quieres que diga la voz clonada...")
+        self.text_edit.setFixedHeight(150)
+        self.text_edit.setStyleSheet(f"""
+            QTextEdit {{ background: #0d1220; color: {TEXT}; border: 1px solid {BORDER}; border-radius: 10px; padding: 12px; font-size: 13px; }}
+            QTextEdit:focus {{ border: 1px solid {PURPLE}; }}
+        """)
+        card_layout.addWidget(self.text_edit)
+
+        # Fila 3: Botón Generar + Progreso
+        row3 = QHBoxLayout()
+        self.btn_generate = QPushButton("✨ Clonar y Generar Audio")
+        self.btn_generate.setFixedHeight(50)
+        self.btn_generate.setStyleSheet(f"""
+            QPushButton {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #6d5df0, stop:1 #8b5cf6); color: white; border: none; border-radius: 12px; font-size: 15px; font-weight: 700; }}
+            QPushButton:hover {{ background: #7d6ffb; }}
+            QPushButton:disabled {{ background: #333a4a; color: #8b93b0; }}
+        """)
+        self.btn_generate.clicked.connect(self._start_cloning)
+        row3.addWidget(self.btn_generate)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 0) # Indeterminado
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setFixedHeight(8)
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar {{ background: #0d1220; border: none; border-radius: 4px; }}
+            QProgressBar::chunk {{ background: {PURPLE}; border-radius: 4px; }}
+        """)
+        self.progress_bar.hide()
+        
+        row3.addWidget(self.progress_bar)
+        card_layout.addLayout(row3)
+
+        layout.addWidget(card)
+        
+        # Status Label
+        self.status_lbl = QLabel("")
+        self.status_lbl.setStyleSheet(f"color: {TEAL}; font-size: 12px; font-weight: 600;")
+        layout.addWidget(self.status_lbl)
+        
+        layout.addStretch(1)
+
+    def _select_wav(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Seleccionar audio de referencia", "", "Archivos WAV (*.wav)")
+        if path:
+            self._wav_path = path
+            self.btn_upload.setText(f"✅ {path.split('/')[-1]}")
+            self.status_lbl.setText("Audio cargado. Listo para clonar.")
+
+    def _start_cloning(self):
+        if not self._wav_path:
+            QMessageBox.warning(self, "Error", "Por favor selecciona un archivo WAV primero.")
+            return
+        
+        text = self.text_edit.toPlainText().strip()
+        if not text:
+            QMessageBox.warning(self, "Error", "Por favor escribe el texto a sintetizar.")
+            return
+
+        lang_map = {"Español (España)": "spanish", "Inglés (EEUU)": "english"}
+        lang = lang_map[self.combo_lang.currentText()]
+
+        # UI Estado: Cargando
+        self.btn_generate.setEnabled(False)
+        self.btn_generate.setText(" Generando...")
+        self.progress_bar.show()
+        self.status_lbl.setText("Iniciando motor de clonación...")
+
+        # Worker
+        self.worker = CloneWorker(self._wav_path, text, lang)
+        self.worker.progress.connect(self.status_lbl.setText)
+        self.worker.finished.connect(self._on_finished)
+        self.worker.error.connect(self._on_error)
+        self.worker.start()
+
+    def _on_finished(self, wav_path):
+        self.btn_generate.setEnabled(True)
+        self.btn_generate.setText("✨ Clonar y Generar Audio")
+        self.progress_bar.hide()
+        self.status_lbl.setText(f"✅ ¡Éxito! Audio guardado en: {wav_path}")
+        QMessageBox.information(self, "Clonación Exitosa", f"El audio clonado se generó correctamente.\n\nRuta: {wav_path}")
+
+    def _on_error(self, msg):
+        self.btn_generate.setEnabled(True)
+        self.btn_generate.setText("✨ Clonar y Generar Audio")
+        self.progress_bar.hide()
+        self.status_lbl.setText("❌ Error en la clonación.")
+        QMessageBox.critical(self, "Error de Clonación", msg)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not getattr(self, "_model_checked", False):
+            self._model_checked = True
+            self._check_model_status()
+
+    def _check_model_status(self):
+        from core.pocket_cloner import cloner_instance
+        if not cloner_instance.is_model_downloaded("spanish"):
+            self._start_download()
+        else:
+            self.main_container.show()
+            self.download_container.hide()
+
+    def _start_download(self):
+        self.main_container.hide()
+        self.download_container.show()
+        self.status_lbl.setText("Preparando descarga...")
+        
+        self.download_worker = DownloadWorker("spanish")
+        self.download_worker.progress.connect(self.status_lbl.setText)
+        self.download_worker.finished.connect(self._on_download_finished)
+        self.download_worker.error.connect(self._on_download_error_model)
+        self.download_worker.start()
+        
+        self.download_timer = QTimer()
+        self.download_timer.timeout.connect(self._pulse_download)
+        self.download_timer.start(2000)
+
+    def _pulse_download(self):
+        txt = self.status_lbl.text()
+        if txt.endswith("..."):
+            self.status_lbl.setText(txt[:-3])
+        else:
+            self.status_lbl.setText(txt + ".")
+
+    def _on_download_finished(self):
+        self.download_timer.stop()
+        self.download_container.hide()
+        self.main_container.show()
+        self.status_lbl.setText("✅ Modelo descargado y listo para usar.")
+
+    def _on_download_error_model(self, msg):
+        self.download_timer.stop()
+        self.download_container.hide()
+        self.main_container.show()
+        self.status_lbl.setText("❌ Error en la descarga.")
+        QMessageBox.critical(self, "Error de Descarga", f"No se pudo descargar el modelo:\n{msg}")

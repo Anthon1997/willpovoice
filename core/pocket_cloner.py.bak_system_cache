@@ -1,0 +1,117 @@
+﻿"""
+MOTOR DE CLONACIÓN DE VOZ - POCKET TTS
+Soporta carga local de pesos (models/) y fallback a caché de HuggingFace.
+Idiomas: Español e Inglés. Formato de entrada: Solo WAV.
+"""
+import os
+import sys
+import logging
+import tempfile
+from pathlib import Path
+# numpy y scipy se importan lazy dentro de clone_and_generate()
+# para no crashear la app al inicio si no están instalados
+
+# Configurar entorno para usar carpeta local de modelos (portable)
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+LOCAL_HF_HOME = PROJECT_ROOT / "models" / "huggingface"
+os.environ["HF_HOME"] = str(LOCAL_HF_HOME)
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+
+# Silenciar logs de transformers/huggingface
+logging.getLogger("transformers").setLevel(logging.ERROR)
+logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+
+class PocketCloner:
+    def __init__(self):
+        self.model = None
+        self.current_lang = None
+
+    def is_model_downloaded(self, language="spanish"):
+        """Verifica si el modelo ya está en la caché local"""
+        cache_dir = LOCAL_HF_HOME / "hub"
+        repo_dir = cache_dir / "models--kyutai--pocket-tts"
+        return repo_dir.exists()
+
+    def download_model(self, language="spanish"):
+        """Descarga el modelo en segundo plano a la carpeta local"""
+        if self.is_model_downloaded(language):
+            return True
+        
+        try:
+            from huggingface_hub import snapshot_download
+            snapshot_download(
+                repo_id="kyutai/pocket-tts",
+                cache_dir=str(LOCAL_HF_HOME),
+                local_dir_use_symlinks=False
+            )
+            return True
+        except Exception as e:
+            raise RuntimeError(f"Error descargando el modelo: {e}")
+
+    def _load_model(self, language="spanish"):
+        """Carga el modelo de Pocket TTS (Español o Inglés)."""
+        if self.model is not None and self.current_lang == language:
+            return  # Ya está cargado
+
+        print(f"🔄 Cargando modelo Pocket TTS ({language})...")
+        try:
+            from pocket_tts import TTSModel
+            # Forzar carga. Si no está en LOCAL_HF_HOME, HF lo descargará ahí la primera vez.
+            self.model = TTSModel.load_model(language=language)
+            self.current_lang = language
+            print(f"✅ Modelo {language} cargado exitosamente.")
+        except Exception as e:
+            print(f"❌ Error cargando modelo: {e}")
+            raise RuntimeError(f"No se pudo cargar el modelo de {language}.")
+
+    def clone_and_generate(self, audio_wav_path: str, text: str, language: str = "spanish") -> str:
+        """
+        Clona la voz del audio WAV y genera el texto.
+        Retorna la ruta del archivo WAV generado.
+        """
+        # Lazy imports: solo se cargan cuando el usuario usa la clonación
+        import numpy as np
+        import scipy.io.wavfile as wavfile
+
+        if not Path(audio_wav_path).exists():
+            raise FileNotFoundError(f"El audio de referencia no existe: {audio_wav_path}")
+        
+        if not audio_wav_path.lower().endswith(".wav"):
+            raise ValueError("Solo se admiten archivos de audio en formato WAV.")
+
+        # 1. Cargar modelo
+        self._load_model(language)
+
+        # 2. Extraer embedding (huella vocal)
+        print(f" Extrayendo huella vocal de: {Path(audio_wav_path).name}")
+        try:
+            voice_state = self.model.get_state_for_audio_prompt(audio_wav_path)
+        except Exception as e:
+            raise RuntimeError(f"Error al procesar el audio de referencia: {e}")
+
+        # 3. Generar audio
+        print(f"🔄 Generando audio ({len(text)} caracteres)...")
+        try:
+            audio_tensor = self.model.generate_audio(
+                model_state=voice_state,
+                text_to_generate=text,
+                frames_after_eos=2,
+                copy_state=True
+            )
+        except Exception as e:
+            raise RuntimeError(f"Error durante la síntesis de voz: {e}")
+
+        # 4. Guardar en archivo temporal WAV
+        output_path = tempfile.mktemp(suffix="_cloned.wav")
+        sample_rate = self.model.sample_rate
+        audio_np = audio_tensor.numpy().T
+        
+        # Normalizar a 16-bit PCM
+        audio_np = np.int16(audio_np / np.max(np.abs(audio_np)) * 32767)
+        wavfile.write(output_path, sample_rate, audio_np)
+        
+        print(f"💾 Audio clonado guardado en: {output_path}")
+        return output_path
+
+# Instancia global para reutilizar el modelo en memoria
+cloner_instance = PocketCloner()
