@@ -1,0 +1,14 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Cabeza del robot -->
+  <rect x="5" y="7" width="14" height="10" rx="3"/>
+  <!-- Antena -->
+  <line x1="12" y1="7" x2="12" y2="4"/>
+  <circle cx="12" cy="3" r="1" fill="currentColor" stroke="none"/>
+  <!-- Ojos -->
+  <circle cx="9" cy="12" r="1.2" fill="currentColor" stroke="none"/>
+  <circle cx="15" cy="12" r="1.2" fill="currentColor" stroke="none"/>
+  <!-- Boca -->
+  <line x1="9" y1="15" x2="15" y2="15"/>
+  <!-- Burbuja de chat (esquina inferior derecha) -->
+  <path d="M17 14 L21 14 C22 14 22 15 22 16 L22 19 C22 20 21 20 20 20 L18 20 L16 22 L16 20 L17 20 C17 18 17 16 17 14 Z" fill="currentColor" opacity="0.3" stroke="currentColor"/>
+</svg>

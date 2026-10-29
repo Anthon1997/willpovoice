@@ -1,4 +1,17 @@
 from __future__ import annotations
+import sys as _sys
+import os as _os
+# STDOUT/STDERR seguros en modo compilado (sin consola o redirigido):
+# evita UnicodeEncodeError 'charmap' con emojis y crash con stdout=None.
+for _name in ("stdout", "stderr"):
+    _stream = getattr(_sys, _name, None)
+    if _stream is None:
+        setattr(_sys, _name, open(_os.devnull, "w", encoding="utf-8"))
+    else:
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
 
 import sys
 

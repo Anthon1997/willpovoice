@@ -1,4 +1,4 @@
-ï»¿#define MyAppName "WillpoVoice"
+#define MyAppName "WillpoVoice"
 
 #define MyAppVersion "1.5.1"
 
@@ -62,7 +62,8 @@ Source: "sapi_adapter\x64\*"; DestDir: "{app}\sapi\x64"; Flags: ignoreversion re
 
 Source: "adapter_config.reg"; DestDir: "{tmp}"; Flags: confirmoverwrite
 
-Source: "..\dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\{#MyAppName}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\voices\Alfredo.safetensors"; DestDir: "{app}\voices"; Flags: ignoreversion
 
 
 
@@ -94,29 +95,29 @@ Filename: "{sys}\reg.exe"; Parameters: "delete ""HKCU\SOFTWARE\NaturalVoiceSAPIA
 
 [Messages]
 
-SetupAppTitle=InstalaciÃ³n
+SetupAppTitle=Instalación
 
-SetupWindowTitle=InstalaciÃ³n - %1
+SetupWindowTitle=Instalación - %1
 
-UninstallAppTitle=DesinstalaciÃ³n
+UninstallAppTitle=Desinstalación
 
-UninstallAppFullTitle=DesinstalaciÃ³n de %1
+UninstallAppFullTitle=Desinstalación de %1
 
 
 
 WelcomeLabel1=Bienvenido a WillpoVoice 
 
-WelcomeLabel2=Este asistente instalarÃ¡ WillpoVoice en tu equipo.%n%nTe recomendamos cerrar todas las aplicaciones antes de continuar.
+WelcomeLabel2=Este asistente instalará WillpoVoice en tu equipo.%n%nTe recomendamos cerrar todas las aplicaciones antes de continuar.
 
 
 
-LicenseLabel=InformaciÃ³n de licencia
+LicenseLabel=Información de licencia
 
-LicenseLabel3=Lee atentamente la siguiente informaciÃ³n antes de continuar. Debes aceptar los tÃ©rminos de la licencia para poder instalar [name].
+LicenseLabel3=Lee atentamente la siguiente información antes de continuar. Debes aceptar los términos de la licencia para poder instalar [name].
 
 
 
-SelectDirLabel3=El asistente instalarÃ¡ WillpoVoice en la siguiente carpeta.
+SelectDirLabel3=El asistente instalará WillpoVoice en la siguiente carpeta.
 
 SelectDirBrowseLabel=Para continuar, pulsa Siguiente. Si deseas seleccionar una carpeta diferente, pulsa Examinar.
 
@@ -124,19 +125,19 @@ SelectDirBrowseLabel=Para continuar, pulsa Siguiente. Si deseas seleccionar una 
 
 ReadyLabel1=Listo para instalar
 
-ReadyLabel2a=Pulsa Instalar para continuar con la instalaciÃ³n, o pulsa AtrÃ¡s si quieres revisar o cambiar alguna opciÃ³n.
+ReadyLabel2a=Pulsa Instalar para continuar con la instalación, o pulsa Atrás si quieres revisar o cambiar alguna opción.
 
 
 
 FinishedHeadingLabel=Completando el asistente de WillpoVoice
 
-FinishedLabel=El asistente ha terminado de instalar WillpoVoice en tu equipo.%n%nPuedes ejecutar la aplicaciÃ³n desde el menÃº inicio o desde el acceso directo del escritorio.
+FinishedLabel=El asistente ha terminado de instalar WillpoVoice en tu equipo.%n%nPuedes ejecutar la aplicación desde el menú inicio o desde el acceso directo del escritorio.
 
 
 
 ButtonNext=&Siguiente >
 
-ButtonBack=< &AtrÃ¡s
+ButtonBack=< &Atrás
 
 ButtonInstall=&Instalar
 
@@ -146,7 +147,7 @@ ButtonCancel=Cancelar
 
 
 
-SelectTasksLabel2=Selecciona las tareas adicionales que deben realizarse durante la instalaciÃ³n de WillpoVoice y pulsa Siguiente.
+SelectTasksLabel2=Selecciona las tareas adicionales que deben realizarse durante la instalación de WillpoVoice y pulsa Siguiente.
 
 
 
