@@ -429,3 +429,78 @@ El asistente de IA DEBE leer y seguir estas reglas en cada sesión.
   bueno (git checkout <tag> -- .), no archivos sueltos.
 - Tras cualquier restauracion: correr scripts/gate_regresion.py ANTES de
   compilar o liberar; y re-verificar marcadores criticos (Seccion 11).
+
+
+--------------------------------------------------------------------------------
+16. MAPA DEL MOTOR TTS (referencia obligatoria ante CUALQUIER cambio vinculado)
+--------------------------------------------------------------------------------
+Cuando el usuario pida un cambio que pueda tocar el motor TTS (estético,
+preview, export, huella, etc.), consultar este mapa ANTES de parchear.
+
+RUTAS FISICAS (3 copias independientes):
+  a) DESARROLLO (este repo):
+     - core/pocket_cloner.py          -> logica completa
+     - models/pocket_tts/hub/         -> pesos del motor (~418 MB, NO va a Git)
+         - models--kyutai--pocket-tts/snapshots/3e82814.../languages/spanish/model.safetensors
+           (checkpoint exacto que valida is_available())
+         - models--kyutai--pocket-tts-without-voice-cloning/snapshots/1e08e6a.../
+           (tokenizer + pesos base, sin clonacion)
+     - voices/*.safetensors           -> huellas vocales (Alfredo.safetensors ~9 MB)
+     - scripts/gate_regresion.py      -> 16 checks (incluye checkpoint TTS)
+     - scripts/dame_contexto.py       -> estado resumido al iniciar sesion
+
+  b) INSTALADO (Program Files):
+     - {app}\_internal\models\pocket_tts\hub   -> pesos reales en onedir
+     - {app}\voices\Alfredo.safetensors          -> huella instalada
+     - {app}\sapi\x64\NaturalVoiceSAPIAdapter.dll (gec-v2)
+
+  c) CACHE ESCRIBIBLE (usuario actual):
+     - %LOCALAPPDATA%\WillpoVoice\previews\<name>.wav -> previews cacheadas
+     - %APPDATA%\WillpoVoice\                          -> estado/settings
+
+PUNTOS DE ENTRADA EN CODIGO:
+  - core/pocket_cloner.py: PocketCloner + cloner_instance (singleton)
+    * is_available() -> valida el checkpoint spanish/model.safetensors
+    * _load_model(lang) -> TTSModel.load_model(language) en modo offline
+    * generate_with_voice(name, text) -> str ruta WAV (UN solo valor)
+    * save/load_voice_state(name) -> safetensors con estado aplanado
+  - ui/modern_window.py:
+    * _ClonedPreviewWorker (QThread) -> genera preview offline
+    * _play_cloned_preview(name) -> caché %LOCALAPPDATA% + worker
+    * _tts_cloned(name, text) -> reproduce con voz clonada
+    * _export_cloned(text, path, is_mp3) -> ExportProgressDialog
+    * _etiqueta_voz(window, name, premium) -> etiqueta "Realista" #ff4fd8
+
+SINTOMAS DE FALLO Y CAUSAS:
+  "El motor de clonacion de voz no esta instalado"
+     -> is_available() = False
+     -> models/pocket_tts/hub falta o checkpoint 3e82814... no esta
+     -> FIX: copiar hub desde {app}\_internal\models\pocket_tts\hub
+        (ver procedimiento en Memoria Seccion 11, leccion de pesos/hub)
+
+  "not enough values to unpack"
+     -> generate_with_voice desempaquetado en 2 valores (devuelve 1 str)
+
+  "'Tensor' object has no attribute 'get'"
+     -> safetensors cargado plano sin reagrupar (ver Seccion 9)
+
+  "Could not find offset in model state"
+     -> estructura anidada incorrecta al cargar (ver Seccion 9)
+
+  "FileNotFoundError: config/*.yaml"
+     -> spec sin collect_data_files("pocket_tts") (ver Seccion 11)
+
+REGLA DE ORO: tras cualquier operacion que pueda afectar el motor
+(filter-repo, reset, checkout masivo, cambio de spec), ejecutar:
+  1) scripts/dame_contexto.py  (verifica que el hub esta presente)
+  2) scripts/gate_regresion.py (16 checks en verde)
+  3) .\.venv\Scripts\python.exe -c "from core.pocket_cloner import
+     cloner_instance; print(cloner_instance.is_available())"
+Si cualquiera falla, restaurar hub desde instalado ANTES de probar previews.
+
+PROTOCOLO DE SESION (al arrancar cada conversacion):
+  1) El usuario ejecuta: .\.venv\Scripts\python.exe scripts\dame_contexto.py
+  2) Pega la salida al asistente (15 s, ~60 lineas).
+  3) Con eso el asistente tiene versiones, gate, estado del motor, huellas
+     y marcadores criticos; puede proponer parches con seguridad.
+  4) NUNCA proponer cambios al motor sin que el gate este en verde previo.
