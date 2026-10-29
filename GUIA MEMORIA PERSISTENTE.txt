@@ -359,6 +359,12 @@ El asistente de IA DEBE leer y seguir estas reglas en cada sesión.
   9540fc6 (guias rev.6). Leccion: commitear antes y restaurar ARBOL COMPLETO
   desde el tag bueno, nunca archivos sueltos (los arboles parciales rompen
   imports y activan fallbacks silenciosos como la UI legacy v1.3.0).
+- Los pesos del motor (~418 MB) NUNCA estan en Git (limite 100 MB). En
+  instalado viven en {app}\_internal\models\pocket_tts (datas onedir); en dev
+  en models\pocket_tts\hub. Tras filter-repo/reset, restaurar el hub desde
+  _internal del build o del instalado; verificar is_available() y el checkpoint
+  3e82814.../languages/spanish/model.safetensors ANTES de probar previews.
+  Sintoma de hub perdido: "El motor de clonacion de voz no esta instalado".
 --------------------------------------------------------------------------------
 12. CHECKLIST DE REGRESIÓN (ANTES DE CERRAR CUALQUIER SESIÓN)
 --------------------------------------------------------------------------------
