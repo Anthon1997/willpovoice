@@ -1,6 +1,6 @@
 #define MyAppName "WillpoVoice"
 
-#define MyAppVersion "1.5.1"
+#define MyAppVersion "1.5.2"
 
 #define MyAppPublisher "WillpoVoice"
 
