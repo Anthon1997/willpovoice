@@ -1,6 +1,6 @@
 ﻿==============================================================
 WILLPOVOICE - METODOLOGIA DE TRABAJO IA (v1.3.0 en adelante)
-Actualizado: 31/08/2026
+Actualizado: 30/10/2026
 Complementa a GUIA_COMPILACION.txt (compilacion/release).
 ==============================================================
 
@@ -76,6 +76,20 @@ PASO 5 - Release
     widgets = recortes fragiles -> usar QVBoxLayout real.
 16. NUNCA asumir que un archivo existe: crear con Set-Content
     directo o verificar con Test-Path antes de leer.
+17. PROTOCOLO DE 5 CHECKS OBLIGATORIOS ANTES DE PROPONER CUALQUIER PARCHE:
+    a) ¿Pedí el `Get-Content` del bloque exacto antes de proponer el `old`?
+       -> Si no, pedirlo. NUNCA asumir el contenido de memoria.
+    b) ¿El `old` que propongo coincide byte-a-byte con lo que está en disco?
+       -> Si no, re-diagnosticar. NO forzar con variantes "parecidas".
+    c) ¿El archivo tiene paleta propia (ej. `clone_voice_page.py`)?
+       -> Aplicar el patrón manual de atributos de instancia (`self._BG_...`),
+          NO intentar que el monkeypatch `_LIGHT_HEX` lo traduzca.
+    d) ¿Los imports nuevos van a nivel de módulo?
+       -> Sí, siempre. Un `from X import Y` dentro de una función lo vuelve local.
+    e) ¿Verifiqué el mecanismo real de persistencia/estado?
+       -> Sí, con sonda directa (ej. `app/config.py` usa JSON, NO `QSettings` del registro).
+    Si en algún momento se propone un parche sin haber pasado estos 5 checks,
+    el usuario debe detener el proceso y recordar este punto.
 
 [4. ESTADO ACTUAL DEL PRODUCTO (v1.3.0)]
 - Planes: Estándar (incluido, 5000 chars/conv) ·
@@ -135,6 +149,23 @@ Para extender/pulir el modo claro:
 Regla: todo color nuevo que se agregue a la UI debe usar
 las constantes (BG/CARD/TEXT/MUTED...) o entrar tambien
 en _LIGHT_HEX, para no romper el modo claro.
+
+EXTENSION PARA ARCHIVOS UI SECUNDARIOS (v1.5.1 - 30/10/2026):
+Los archivos UI que NO son modern_window.py (ej. clone_voice_page.py)
+tienen su propia paleta hardcoded (BG_APP, BG_CARD, BORDER, etc.) que
+NO traduce el monkeypatch _LIGHT_HEX: requieren tratamiento manual.
+a) Tema: from app.config import load_settings;
+   self._light_mode = str(load_settings().get("theme", "Oscuro")) == "Claro"
+   (NUNCA QSettings directo: el tema vive en ~/WillpoVoice/settings.json).
+b) Paleta condicional como ATRIBUTOS DE INSTANCIA en __init__:
+   self._BG_APP / self._BG_CARD / self._BORDER / self._TEXT_MUTED...
+   (variables locales = NameError en _build_audio_card y similares).
+c) En cada setStyleSheet usar {self._BG_...} en vez de {BG_...}.
+d) Fondos con imagen: "chat_bg_ligth.png" si claro (typo oficial con
+   'ligth'), "chat_bg.png" si oscuro; incluir header si aplica.
+El dict _LIGHT_HEX tiene DOS definiciones en modern_window.py (~64 y
+~9870): solo la SEGUNDA se aplica; agregar pares a la primera no hace nada.
+Regla: todo archivo UI nuevo debe nacer con este patron (ver Memoria 4.1).
 ==============================================================
-FIN - metodologia validada en v1.3.0 (31/08/2026)
+FIN - metodologia actualizada en v1.5.1 (30/10/2026)
 ==============================================================

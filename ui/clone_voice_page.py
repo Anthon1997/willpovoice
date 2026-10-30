@@ -61,15 +61,48 @@ class CloneWorker(QThread):
 class CloneVoicePage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setStyleSheet(f"background: {BG_APP};")
+        
+        # Detectar modo claro desde app.config (mismo mecanismo que modern_window._light_theme_enabled)
+        from app.config import load_settings
+        self._light_mode = str(load_settings().get("theme", "Oscuro")) == "Claro"
+        
+        # Paleta condicional según modo (atributos de instancia para acceso en todos los métodos)
+        if self._light_mode:
+            self._BG_APP = "#f3f5fa"
+            self._BG_HEADER = "#e9edf5"
+            self._BG_CARD = "rgba(255, 255, 255, 220)"
+            self._BG_CARD_ALT = "rgba(242, 244, 250, 220)"
+            self._BG_INPUT = "rgba(255, 255, 255, 200)"
+            self._BORDER = "#d5dcea"
+            self._BORDER_LIGHT = "#c0c8d8"
+            self._TEXT_PRIMARY = "#17203a"
+            self._TEXT_SECONDARY = "#3c465e"
+            self._TEXT_MUTED = "#5b6478"
+        else:
+            self._BG_APP = BG_APP
+            self._BG_HEADER = BG_HEADER
+            self._BG_CARD = BG_CARD
+            self._BG_CARD_ALT = BG_CARD_ALT
+            self._BG_INPUT = BG_INPUT
+            self._BORDER = BORDER
+            self._BORDER_LIGHT = BORDER_LIGHT
+            self._TEXT_PRIMARY = TEXT_PRIMARY
+            self._TEXT_SECONDARY = TEXT_SECONDARY
+            self._TEXT_MUTED = TEXT_MUTED
+        
+        self.setStyleSheet(f"background: {self._BG_APP};")
         self._wav_path = None
         
-        # Cargar imagen de fondo chat_bg.png
+        # Cargar imagen de fondo según modo
         from pathlib import Path as PathLib
-        bg_path = PathLib(__file__).resolve().parents[1] / "assets" / "icons" / "chat_bg.png"
+        bg_name = "chat_bg_ligth.png" if self._light_mode else "chat_bg.png"
+        bg_path = PathLib(__file__).resolve().parents[1] / "assets" / "icons" / bg_name
         self.bg_pixmap = QPixmap(str(bg_path)) if bg_path.exists() else QPixmap()
         if not self.bg_pixmap.isNull():
             self.setAutoFillBackground(False)
+        
+        # Cargar imagen de fondo para el header (misma imagen, escalada)
+        self.header_bg_pixmap = QPixmap(str(bg_path)) if bg_path.exists() else QPixmap()
         
         # Cargar icono de robocito (wizard)
         wizard_path = PathLib(__file__).resolve().parents[1] / "assets" / "icons" / "wizard_small.bmp"
@@ -178,30 +211,33 @@ class CloneVoicePage(QWidget):
             QFrame#header_frame {{
                 background: transparent;
                 border-radius: 12px;
-                border: 1px solid {BORDER};
+                border: 1px solid {self._BORDER};
             }}
         """)
         
-        # Cargar imagen de ondas como fondo
-        from pathlib import Path as PathLib
-        ondas_path = PathLib(__file__).resolve().parents[1] / "assets" / "icons" / "ondas.png"
-        self.ondas_pixmap = QPixmap(str(ondas_path)) if ondas_path.exists() else QPixmap()
-        
-        # Crear label para las ondas
-        self.ondas_label = QLabel(header)
-        self.ondas_label.setObjectName("ondas_label")
-        self.ondas_label.setStyleSheet("background: transparent; border: none;")
-        if not self.ondas_pixmap.isNull():
-            self.ondas_label.setPixmap(self.ondas_pixmap.scaled(
+        # Configurar fondo del header con chat_bg (escalado para altura)
+        header.setAutoFillBackground(False)
+        # Cargar imagen de fondo condicional (misma lógica que el body)
+        bg_name = "chat_bg_ligth.png" if self._light_mode else "chat_bg.png"
+        header_bg_path = Path(__file__).resolve().parents[1] / "assets" / "icons" / bg_name
+        self.header_bg_pixmap = QPixmap(str(header_bg_path)) if header_bg_path.exists() else QPixmap()
+        if not self.header_bg_pixmap.isNull():
+            # Escalar imagen para cubrir el header (altura fija 65px)
+            self.header_bg_pixmap = self.header_bg_pixmap.scaled(
                 header.size(),
-                Qt.AspectRatioMode.IgnoreAspectRatio,
-                Qt.TransformationMode.SmoothTransformation
-            ))
-            self.ondas_label.setGeometry(0, 0, header.width(), header.height())
-            self.ondas_label.lower()
-            self.ondas_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                Qt.TransformationMode.SmoothTransformation)
         
-        header.paintEvent = self._header_paint_event
+        # Sobrescribir paintEvent del header para dibujar el fondo
+        def header_paint(event):
+            QFrame.paintEvent(header, event)
+            if not self.header_bg_pixmap.isNull():
+                painter = QPainter(header)
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                painter.drawPixmap(0, 0, self.header_bg_pixmap)
+                painter.end()
+        
+        header.paintEvent = header_paint
 
         layout = QHBoxLayout(header)
         layout.setContentsMargins(16, 10, 16, 10)
@@ -229,7 +265,7 @@ class CloneVoicePage(QWidget):
 
         title = QLabel("Clonación de Voz")
         title.setStyleSheet(f"""
-            color: {TEXT_PRIMARY};
+            color: {self._TEXT_PRIMARY};
             font-size: 18px;
             font-weight: 700;
             border: none;
@@ -254,7 +290,7 @@ class CloneVoicePage(QWidget):
 
         subtitle = QLabel("Crea una voz personalizada a partir de una muestra de audio.")
         subtitle.setStyleSheet(f"""
-            color: {TEXT_SECONDARY};
+            color: {self._TEXT_SECONDARY};
             font-size: 10px;
             border: none;
         """)
@@ -297,45 +333,9 @@ class CloneVoicePage(QWidget):
         return header
 
     def _header_paint_event(self, event):
-        # Verificar que el widget sea válido
-        if not self.ondas_label or not self.ondas_label.isVisible():
-            return
-        
-        header = self.ondas_label.parentWidget()
-        if not header or not header.isVisible():
-            return
-            
-        try:
-            painter = QPainter(header)
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-            
-            # Si hay imagen de ondas, no dibujar el fondo azul
-            if hasattr(self, 'ondas_pixmap') and not self.ondas_pixmap.isNull():
-                # Solo dibujar ondas decorativas sutiles encima si es necesario
-                painter.setPen(Qt.PenStyle.NoPen)
-                for i in range(2):
-                    path = QPainterPath()
-                    y_offset = 25 + i * 12
-                    alpha = 20 - i * 8
-                    color = QColor(ACCENT_BLUE)
-                    color.setAlpha(alpha)
-                    painter.setBrush(QBrush(color))
-
-                    path.moveTo(0, y_offset)
-                    for x in range(0, header.width(), 6):
-                        y = y_offset + 10 * math.sin(x * 0.008 + i * 0.5)
-                        path.lineTo(x, y)
-                    path.lineTo(header.width(), header.height())
-                    path.lineTo(0, header.height())
-                    path.closeSubpath()
-                    painter.drawPath(path)
-            else:
-                # Sin imagen, pintar fondo azul
-                painter.fillRect(header.rect(), QColor(BG_HEADER))
-            
-            painter.end()
-        except Exception:
-            pass  # Ignorar errores de pintura
+        # Método obsoleto: el header ahora usa header_paint en _build_header
+        # Se mantiene por compatibilidad pero no hace nada
+        pass
 
     # ------------------------------------------------------------------
     # CARD: AUDIO DE REFERENCIA
@@ -345,9 +345,9 @@ class CloneVoicePage(QWidget):
         card.setObjectName("wp_card")
         card.setStyleSheet(f"""
             QFrame#wp_card {{
-                background: {BG_CARD};
+                background: {self._BG_CARD};
                 border-radius: 12px;
-                border: 1px solid {BORDER};
+                border: 1px solid {self._BORDER};
             }}
             QFrame#wp_card QLabel {{
                 background: transparent;
@@ -371,7 +371,7 @@ class CloneVoicePage(QWidget):
 
         title = QLabel("Audio de referencia")
         title.setStyleSheet(f"""
-            color: {TEXT_PRIMARY};
+            color: {self._TEXT_PRIMARY};
             font-size: 15px;
             font-weight: 600;
             border: none;
@@ -382,7 +382,7 @@ class CloneVoicePage(QWidget):
 
         subtitle = QLabel("Sube un archivo de audio con la voz que quieres clonar.")
         subtitle.setStyleSheet(f"""
-            color: {TEXT_SECONDARY};
+            color: {self._TEXT_SECONDARY};
             font-size: 10px;
             border: none;
         """)
@@ -407,14 +407,29 @@ class CloneVoicePage(QWidget):
         specs.setContentsMargins(0, 0, 0, 0)
 
         specs_text = [
-            "Formatos soportados: WAV (recomendado)",
+            "Formatos soportados: WAV",
             "Máx. 10 MB",
             "Duración recomendada: 5s - 60s"
         ]
+        # Icono "?" con tooltip informativo
+        help_lbl = QLabel("?")
+        help_lbl.setStyleSheet(f"""
+            color: {self._TEXT_MUTED};
+            font-size: 10px;
+            font-weight: bold;
+            border: 1px solid {self._BORDER};
+            border-radius: 3px;
+            padding: 0px 4px;
+            margin: 0px 2px;
+        """)
+        help_lbl.setToolTip("El audio debe ser limpio sin ruido, en caso de que el resultado no sea el esperado volver a grabar la voz de el archivo de voz")
+        help_lbl.setCursor(Qt.CursorShape.WhatsThisCursor)
+        specs.addWidget(help_lbl)
+
         for i, text in enumerate(specs_text):
             lbl = QLabel(text)
             lbl.setStyleSheet(f"""
-                color: {TEXT_MUTED};
+                color: {self._TEXT_MUTED};
                 font-size: 10px;
                 border: none;
             """)
@@ -422,7 +437,7 @@ class CloneVoicePage(QWidget):
             if i < len(specs_text) - 1:
                 sep = QLabel("|")
                 sep.setStyleSheet(f"""
-                    color: {BORDER};
+                    color: {self._BORDER};
                     font-size: 10px;
                     border: none;
                 """)
@@ -438,8 +453,8 @@ class CloneVoicePage(QWidget):
         zone.setObjectName("drop_zone")
         zone.setStyleSheet(f"""
             QFrame#drop_zone {{
-                background: {BG_CARD_ALT};
-                border: 2px dashed {BORDER_LIGHT};
+                background: {self._BG_CARD_ALT};
+                border: 2px dashed {self._BORDER_LIGHT};
                 border-radius: 8px;
             }}
             QFrame#drop_zone QLabel {{
@@ -461,7 +476,7 @@ class CloneVoicePage(QWidget):
 
         t1 = QLabel("Arrastra tu audio aquí")
         t1.setStyleSheet(f"""
-            color: {TEXT_PRIMARY};
+            color: {self._TEXT_PRIMARY};
             font-size: 12px;
             font-weight: 600;
             border: none;
@@ -471,7 +486,7 @@ class CloneVoicePage(QWidget):
 
         t2 = QLabel("o selecciona un archivo desde tu equipo")
         t2.setStyleSheet(f"""
-            color: {TEXT_SECONDARY};
+            color: {self._TEXT_SECONDARY};
             font-size: 10px;
             border: none;
         """)
@@ -513,8 +528,8 @@ class CloneVoicePage(QWidget):
         preview.setFixedHeight(150)
         preview.setStyleSheet(f"""
             QFrame#wp_preview {{
-                background: {BG_CARD_ALT};
-                border: 1px solid {BORDER_LIGHT};
+                background: {self._BG_CARD_ALT};
+                border: 1px solid {self._BORDER_LIGHT};
                 border-radius: 8px;
             }}
             QFrame#wp_preview QLabel {{
@@ -529,7 +544,7 @@ class CloneVoicePage(QWidget):
         # Estado vacio
         self.preview_empty = QLabel("Aún no hay audio seleccionado")
         self.preview_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.preview_empty.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px;")
+        self.preview_empty.setStyleSheet(f"color: {self._TEXT_MUTED}; font-size: 12px;")
         outer.addWidget(self.preview_empty)
 
         # Contenido con archivo cargado
@@ -564,10 +579,10 @@ class CloneVoicePage(QWidget):
         info = QVBoxLayout()
         info.setSpacing(2)
         self.preview_name = QLabel("mi_voz.wav")
-        self.preview_name.setStyleSheet(f"color: {TEXT_PRIMARY}; font-size: 13px; font-weight: 600;")
+        self.preview_name.setStyleSheet(f"color: {self._TEXT_PRIMARY}; font-size: 13px; font-weight: 600;")
         info.addWidget(self.preview_name)
         self.preview_meta = QLabel("WAV  •  0.0 MB  •  00:00")
-        self.preview_meta.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 10px;")
+        self.preview_meta.setStyleSheet(f"color: {self._TEXT_MUTED}; font-size: 10px;")
         info.addWidget(self.preview_meta)
         row1.addLayout(info, 1)
 
@@ -578,8 +593,8 @@ class CloneVoicePage(QWidget):
             self.reload_btn.setIconSize(QSize(15, 15))
         self.reload_btn.setFixedSize(30, 30)
         self.reload_btn.setStyleSheet(f"""
-            QToolButton {{ background: {BG_CARD}; border: 1px solid {BORDER}; border-radius: 7px; }}
-            QToolButton:hover {{ background: {BORDER_LIGHT}; }}
+            QToolButton {{ background: {self._BG_CARD}; border: 1px solid {self._BORDER}; border-radius: 7px; }}
+            QToolButton:hover {{ background: {self._BORDER_LIGHT}; }}
         """)
         self.reload_btn.clicked.connect(self._select_audio)
         row1.addWidget(self.reload_btn)
@@ -591,7 +606,7 @@ class CloneVoicePage(QWidget):
             self.delete_btn.setIconSize(QSize(15, 15))
         self.delete_btn.setFixedSize(30, 30)
         self.delete_btn.setStyleSheet(f"""
-            QToolButton {{ background: {BG_CARD}; border: 1px solid {BORDER}; border-radius: 7px; }}
+            QToolButton {{ background: {self._BG_CARD}; border: 1px solid {self._BORDER}; border-radius: 7px; }}
             QToolButton:hover {{ background: #ef4444; border-color: #dc2626; }}
         """)
         self.delete_btn.clicked.connect(self._clear_audio)
@@ -604,8 +619,8 @@ class CloneVoicePage(QWidget):
         player.setObjectName("wp_player")
         player.setStyleSheet(f"""
             QFrame#wp_player {{
-                background: {BG_CARD};
-                border: 1px solid {BORDER};
+                background: {self._BG_CARD};
+                border: 1px solid {self._BORDER};
                 border-radius: 8px;
             }}
         """)
@@ -637,7 +652,7 @@ class CloneVoicePage(QWidget):
         self.track_slider.setFixedHeight(16)
         self.track_slider.setStyleSheet(f"""
             QSlider::groove:horizontal {{
-                background: {BORDER_LIGHT};
+                background: {self._BORDER_LIGHT};
                 height: 4px;
                 border-radius: 2px;
             }}
@@ -656,7 +671,7 @@ class CloneVoicePage(QWidget):
         pl.addWidget(self.track_slider, 1)
 
         self.time_label = QLabel("00:00 / 00:00")
-        self.time_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 10px;")
+        self.time_label.setStyleSheet(f"color: {self._TEXT_MUTED}; font-size: 10px;")
         pl.addWidget(self.time_label)
 
         pc.addWidget(player)
@@ -683,9 +698,9 @@ class CloneVoicePage(QWidget):
         card.setObjectName("wp_card")
         card.setStyleSheet(f"""
             QFrame#wp_card {{
-                background: {BG_CARD};
+                background: {self._BG_CARD};
                 border-radius: 12px;
-                border: 1px solid {BORDER};
+                border: 1px solid {self._BORDER};
             }}
             QFrame#wp_card QLabel {{
                 background: transparent;
@@ -711,7 +726,7 @@ class CloneVoicePage(QWidget):
 
         title = QLabel("Configuración de voz")
         title.setStyleSheet(f"""
-            color: {TEXT_PRIMARY};
+            color: {self._TEXT_PRIMARY};
             font-size: 15px;
             font-weight: 600;
             border: none;
@@ -723,7 +738,7 @@ class CloneVoicePage(QWidget):
 
         subtitle = QLabel("Selecciona el idioma y la variante de la voz para la clonación.")
         subtitle.setStyleSheet(f"""
-            color: {TEXT_SECONDARY};
+            color: {self._TEXT_SECONDARY};
             font-size: 10px;
             border: none;
         """)
@@ -741,7 +756,7 @@ class CloneVoicePage(QWidget):
 
         lbl1 = QLabel("Idioma")
         lbl1.setStyleSheet(f"""
-            color: {TEXT_SECONDARY};
+            color: {self._TEXT_SECONDARY};
             font-size: 10px;
             font-weight: 500;
             border: none;
@@ -762,7 +777,7 @@ class CloneVoicePage(QWidget):
 
         lbl2 = QLabel("Variante regional")
         lbl2.setStyleSheet(f"""
-            color: {TEXT_SECONDARY};
+            color: {self._TEXT_SECONDARY};
             font-size: 10px;
             font-weight: 500;
             border: none;
@@ -783,7 +798,7 @@ class CloneVoicePage(QWidget):
 
         lbl3 = QLabel("Opciones avanzadas")
         lbl3.setStyleSheet(f"""
-            color: {TEXT_SECONDARY};
+            color: {self._TEXT_SECONDARY};
             font-size: 10px;
             font-weight: 500;
             border: none;
@@ -804,8 +819,8 @@ class CloneVoicePage(QWidget):
         self.speed_panel.setObjectName("wp_speed")
         self.speed_panel.setStyleSheet(f"""
             QFrame#wp_speed {{
-                background: {BG_CARD_ALT};
-                border: 1px solid {BORDER};
+                background: {self._BG_CARD_ALT};
+                border: 1px solid {self._BORDER};
                 border-radius: 6px;
             }}
             QFrame#wp_speed QLabel {{
@@ -822,8 +837,8 @@ class CloneVoicePage(QWidget):
         self.speed_slider.setValue(100)
         self.speed_slider.setStyleSheet(f"""
             QSlider::groove:horizontal {{
-                background: {BG_APP};
-                border: 1px solid {BORDER};
+                background: {self._BG_APP};
+                border: 1px solid {self._BORDER};
                 height: 4px;
                 border-radius: 2px;
             }}
@@ -846,7 +861,7 @@ class CloneVoicePage(QWidget):
 
         self.speed_label = QLabel("Velocidad: 1.0x")
         self.speed_label.setStyleSheet(f"""
-            color: {TEXT_MUTED};
+            color: {self._TEXT_MUTED};
             font-size: 10px;
             border: none;
         """)
@@ -863,11 +878,11 @@ class CloneVoicePage(QWidget):
     def _combo_style(self):
         return f"""
             QComboBox {{
-                background: {BG_INPUT};
-                border: 1px solid {BORDER};
+                background: {self._BG_INPUT};
+                border: 1px solid {self._BORDER};
                 border-radius: 6px;
                 padding: 0 10px;
-                color: {TEXT_PRIMARY};
+                color: {self._TEXT_PRIMARY};
                 font-size: 10px;
             }}
             QComboBox::drop-down {{
@@ -878,11 +893,11 @@ class CloneVoicePage(QWidget):
                 image: none;
             }}
             QComboBox QAbstractItemView {{
-                background: {BG_INPUT};
-                border: 1px solid {BORDER};
+                background: {self._BG_INPUT};
+                border: 1px solid {self._BORDER};
                 border-radius: 5px;
                 selection-background-color: {ACCENT_PURPLE};
-                color: {TEXT_PRIMARY};
+                color: {self._TEXT_PRIMARY};
                 padding: 3px;
             }}
         """
@@ -905,9 +920,9 @@ class CloneVoicePage(QWidget):
         card.setObjectName("wp_card")
         card.setStyleSheet(f"""
             QFrame#wp_card {{
-                background: {BG_CARD};
+                background: {self._BG_CARD};
                 border-radius: 12px;
-                border: 1px solid {BORDER};
+                border: 1px solid {self._BORDER};
             }}
             QFrame#wp_card QLabel {{
                 background: transparent;
@@ -938,11 +953,11 @@ class CloneVoicePage(QWidget):
         titles.setContentsMargins(0, 0, 0, 0)
 
         title = QLabel("Texto para generar")
-        title.setStyleSheet(f"color: {TEXT_PRIMARY}; font-size: 15px; font-weight: 600;")
+        title.setStyleSheet(f"color: {self._TEXT_PRIMARY}; font-size: 15px; font-weight: 600;")
         titles.addWidget(title)
 
         subtitle = QLabel("Escribe el texto que quieres convertir en voz con la voz clonada.")
-        subtitle.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 10px;")
+        subtitle.setStyleSheet(f"color: {self._TEXT_SECONDARY}; font-size: 10px;")
         titles.addWidget(subtitle)
 
         header.addLayout(titles, 1)
@@ -952,8 +967,8 @@ class CloneVoicePage(QWidget):
         text_container.setObjectName("wp_textbox")
         text_container.setStyleSheet(f"""
             QFrame#wp_textbox {{
-                background: {BG_INPUT};
-                border: 1px solid {BORDER};
+                background: {self._BG_INPUT};
+                border: 1px solid {self._BORDER};
                 border-radius: 8px;
             }}
         """)
@@ -967,7 +982,7 @@ class CloneVoicePage(QWidget):
             QTextEdit {{
                 background: transparent;
                 border: none;
-                color: {TEXT_PRIMARY};
+                color: {self._TEXT_PRIMARY};
                 font-size: 10px;
                 min-height: 80px;
                 max-height: 80px;
@@ -1012,7 +1027,7 @@ class CloneVoicePage(QWidget):
         # Contador
         self.char_counter = QLabel("0 / 5000")
         self.char_counter.setStyleSheet(f"""
-            color: {TEXT_MUTED};
+            color: {self._TEXT_MUTED};
             font-size: 10px;
             border: none;
         """)
@@ -1027,16 +1042,16 @@ class CloneVoicePage(QWidget):
     def _secondary_btn_style(self):
         return f"""
             QPushButton {{
-                background: {BG_CARD};
-                border: 1px solid {BORDER};
+                background: {self._BG_CARD};
+                border: 1px solid {self._BORDER};
                 border-radius: 5px;
-                color: {TEXT_SECONDARY};
+                color: {self._TEXT_SECONDARY};
                 padding: 0 10px;
                 font-size: 10px;
             }}
             QPushButton:hover {{
-                background: {BORDER_LIGHT};
-                color: {TEXT_PRIMARY};
+                background: {self._BORDER_LIGHT};
+                color: {self._TEXT_PRIMARY};
             }}
         """
 
@@ -1087,8 +1102,8 @@ class CloneVoicePage(QWidget):
                     stop:0 #1d4ed8, stop:1 #6d28d9);
             }}
             QPushButton:disabled {{
-                background: {BORDER};
-                color: {TEXT_MUTED};
+                background: {self._BORDER};
+                color: {self._TEXT_MUTED};
             }}
         """)
         self.clone_btn.clicked.connect(self._start_cloning)
@@ -1102,7 +1117,7 @@ class CloneVoicePage(QWidget):
         self.progress_bar.setFixedHeight(46)  # Más gruesa
         self.progress_bar.setStyleSheet(f"""
             QProgressBar {{
-                background: {BG_CARD};
+                background: {self._BG_CARD};
                 border: 1px solid rgba(167, 139, 250, 0.55);
                 border-radius: 14px;
                 height: 46px;
