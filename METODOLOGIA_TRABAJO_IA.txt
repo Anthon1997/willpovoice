@@ -93,8 +93,8 @@ PASO 5 - Release
 
 [4. ESTADO ACTUAL DEL PRODUCTO (v1.3.0)]
 - Planes: Estándar (incluido, 5000 chars/conv) ·
-  Platinum (S/15, 20000 chars, soporte prioritario Discord,
-  actualizaciones) · Gold (S/30, ilimitado, Discord,
+  Platinum (S/30, 20000 chars, soporte prioritario Discord,
+  actualizaciones) · Gold (S/50, ilimitado, Discord,
   nuevas voces/funciones). Icono Platinum = gema SVG.
 - Sin prueba de 7 dias, sin tokens, sin suscripciones.
 - Tiers de licencia: M=Platinum, A/L=Gold (claves WVP2,

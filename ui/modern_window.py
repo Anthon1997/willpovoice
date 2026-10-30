@@ -6076,8 +6076,8 @@ TR_EN = {
     "Predeterminado de": "Default",
     "Plan Est\u00e1ndar": "Standard plan",
     "Plan Platinum": "Platinum Plan", "Plan Gold": "Gold Plan",
-    "S/ 15 \u00b7 pago seguro con Yape": "S/ 15 \u00b7 secure payment with Yape",
     "S/ 30 \u00b7 pago seguro con Yape": "S/ 30 \u00b7 secure payment with Yape",
+    "S/ 50 \u00b7 pago seguro con Yape": "S/ 50 \u00b7 secure payment with Yape",
     "Escanea el QR con tu app Yape y paga de forma segura, sin necesidad de nuestro numero.":
         "Scan the QR with your Yape app and pay securely, no need for our number.",
     "1) Escanea el QR con Yape  \u00b7  2) Envia tu comprobante por Discord  \u00b7  3) Recibe tu clave al instante":
@@ -7875,7 +7875,7 @@ def _show_no_tokens(self):
     price_row = QHBoxLayout()
     price_row.setSpacing(10)
     price_row.addStretch(1)
-    old_price = QLabel("S/ 15")
+    old_price = QLabel("S/ 30")
     old_price.setStyleSheet(
         "color: #8b949e; font-size: 20px; font-weight: 500;"
         " text-decoration: line-through;")
@@ -8328,20 +8328,20 @@ class PlansDialog(QDialog):
                    btn_icon=self._GIFT, solid=False,
                    on_buy=self._start_trial)
         _GEM_PATH = "M6 3 L18 3 L22 9 L12 21 L2 9 Z M2 9 L22 9 M9 9 L12 21 M15 9 L12 21 M9 9 L11 3 M15 9 L13 3"
-        self._card(v, "#a855f7", None, _GEM_PATH, "Platinum", "S/ 15",
+        self._card(v, "#a855f7", None, _GEM_PATH, "Platinum", "S/ 30",
                    ["Hasta 20,000 caracteres por conversión (≈22 min)", "Soporte prioritario por Discord",
                     "Todas las voces premium", "Actualizaciones incluidas"],
                    btn_text="Comprar", btn_icon=self._CART, solid=False,
                    on_buy=lambda: self._buy(
-                       "Platinum", 15, YAPE_URL_MENSUAL))
-        self._card(v, "#ffb020", "star", None, "Gold", "S/ 30",
+                       "Platinum", 30, YAPE_URL_MENSUAL))
+        self._card(v, "#ffb020", "star", None, "Gold", "S/ 50",
                    ["Caracteres ILIMITADOS", "Sin límites artificiales",
                     "Voces nuevas para siempre",
                     "Soporte prioritario de por vida"],
                    btn_text="Comprar", btn_icon=None, solid=True,
                    badge="Recomendado", ribbon=True,
                    on_buy=lambda: self._buy(
-                       "Gold", 30, YAPE_URL_LIFETIME))
+                       "Gold", 50, YAPE_URL_LIFETIME))
 
         v.addSpacing(2)
         foot = QFrame()
