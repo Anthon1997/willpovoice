@@ -1,6 +1,6 @@
 #define MyAppName "WillpoVoice"
 
-#define MyAppVersion "1.5.3"
+#define MyAppVersion "1.5.4"
 
 #define MyAppPublisher "WillpoVoice"
 
@@ -78,6 +78,7 @@ Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: 
 [Run]
 
 Filename: "C:\Windows\Sysnative\regsvr32.exe"; Parameters: "/s ""{app}\sapi\x64\NaturalVoiceSAPIAdapter.dll"""; Flags: runhidden waituntilterminated
+Filename: "{app}\WillpoVoice.exe"; Description: "Iniciar WillpoVoice"; Flags: nowait postinstall skipifsilent
 
 Filename: "{win}\regedit.exe"; Parameters: "/s ""{tmp}\adapter_config.reg"""; StatusMsg: "Aplicando configuracion de 321 voces..."; Flags: runhidden waituntilterminated
 
