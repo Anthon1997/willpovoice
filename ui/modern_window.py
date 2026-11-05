@@ -5561,6 +5561,49 @@ def _run_export(self, text, path, is_mp3):
         self.export_worker.start()
 
 
+def _register_export_success(self, path, text, voice_name):
+    """Registra un export exitoso en history (converted=True) y refresca Proyectos"""
+    try:
+        _txt = str(text or "").strip()
+        if not _txt:
+            return
+        _items = self.settings.get("history", [])
+        _dur = 0.0
+        try:
+            _dur = self._proj_dur_of(path)
+        except Exception:
+            _dur = 0.0
+        _hit = None
+        for _it in _items:
+            if isinstance(_it, dict) and \
+                    str(_it.get("content", "")).strip() == _txt:
+                _hit = _it
+                break
+        if _hit is None:
+            from datetime import datetime as _dt
+            _hit = {"content": _txt,
+                    "ts": _dt.now().strftime("%d/%m/%Y %H:%M:%S")}
+            _items.append(_hit)
+        _hit["converted"] = True
+        _hit["file"] = str(path)
+        if voice_name:
+            _hit["voice"] = str(voice_name)
+        if _dur:
+            _hit["duration"] = _dur
+        self.settings["history"] = _items
+        try:
+            from app.config import save_settings as _ss
+            _ss(self.settings)
+        except Exception:
+            pass
+        try:
+            self._rebuild_projects()
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
 def on_export_ok(self, path):
     final_path = path
     mp3_target = getattr(self, "_mp3_final_path", None)
@@ -5577,16 +5620,8 @@ def on_export_ok(self, path):
             return
     try:
         _txt = str(getattr(self, "_last_export_text", "") or "").strip()
-        _items = self.settings.get("history", [])
-        _dur = self._audio_dur(final_path)
-        for _it in _items:
-            if isinstance(_it, dict) and _txt and \
-                    str(_it.get("content", "")).strip() == _txt:
-                _it["converted"] = True
-                _it["file"] = str(final_path)
-                if _dur:
-                    _it["duration"] = _dur
-        self.settings["history"] = _items
+        _voice = self.voice_combo.currentData(Qt.ItemDataRole.UserRole)
+        self._register_export_success(final_path, _txt, _voice)
     except Exception:
         pass
     self.statusBar().showMessage(f"Audio guardado en: {final_path}")
@@ -6236,6 +6271,67 @@ def _proj_fmt_dur(self, secs):
         return "00:00"
 
 
+def _proj_set_icon(btn, playing):
+    try:
+        btn.setIcon(QIcon(make_icon("pause" if playing else "play",
+                                    "#7cb7ff", 14)))
+    except Exception:
+        pass
+
+
+def _proj_dur_of(self, path):
+    try:
+        p = Path(path)
+        if not p.exists():
+            return 0.0
+        if p.suffix.lower() == ".wav":
+            import wave
+            with wave.open(str(p), "rb") as wv:
+                return wv.getnframes() / float(wv.getframerate())
+        if p.suffix.lower() == ".mp3":
+            return p.stat().st_size * 8.0 / (192.0 * 1000.0)
+    except Exception:
+        pass
+    return 0.0
+
+
+def _proj_toggle(self, path, btn):
+    from PySide6.QtMultimedia import QMediaPlayer
+    pl = getattr(self, "_proj_player", None)
+    cur = ""
+    if pl is not None:
+        try:
+            cur = pl.source().toLocalFile()
+        except Exception:
+            cur = ""
+    if pl is not None and cur == str(path):
+        st = pl.playbackState()
+        if st == QMediaPlayer.PlaybackState.PlayingState:
+            pl.pause()
+            _proj_set_icon(btn, False)
+            return
+        if st == QMediaPlayer.PlaybackState.PausedState:
+            pl.play()
+            _proj_set_icon(btn, True)
+            return
+    self._proj_play(path)
+    for _f2, _b2 in getattr(self, "_proj_btn_by_file", {}).items():
+        try:
+            _proj_set_icon(_b2, str(_f2) == str(path))
+        except Exception:
+            pass
+
+
+def _proj_state_changed(self, st):
+    from PySide6.QtMultimedia import QMediaPlayer
+    if st == QMediaPlayer.PlaybackState.StoppedState:
+        for _b2 in getattr(self, "_proj_btn_by_file", {}).values():
+            try:
+                _proj_set_icon(_b2, False)
+            except Exception:
+                pass
+
+
 def _proj_play(self, path):
     try:
         if not path or not Path(path).exists():
@@ -6246,6 +6342,7 @@ def _proj_play(self, path):
         if not getattr(self, "_proj_player", None):
             self._proj_player = QMediaPlayer(self)
             self._proj_player.setAudioOutput(QAudioOutput(self))
+            self._proj_player.playbackStateChanged.connect(self._proj_state_changed)
         self._proj_player.setSource(QUrl.fromLocalFile(str(path)))
         self._proj_player.play()
         self.statusBar().showMessage("Reproduciendo proyecto...")
@@ -6379,6 +6476,7 @@ def _proj_row(self, e, favs):
     h.addLayout(vc, 1)
     rc = QVBoxLayout()
     rc.setSpacing(2)
+    rc.addStretch(1)
     rt = QLabel(self._proj_fmt_dur(e["dur"]))
     rt.setStyleSheet("color: #ffffff; font-size: 14px; font-weight: 700;")
     rt.setAlignment(Qt.AlignmentFlag.AlignRight)
@@ -6387,6 +6485,7 @@ def _proj_row(self, e, favs):
     rl.setStyleSheet("color: #8b93b0; font-size: 10px;")
     rl.setAlignment(Qt.AlignmentFlag.AlignRight)
     rc.addWidget(rl)
+    rc.addStretch(1)
     h.addLayout(rc)
     play = QPushButton()
     play.setFixedSize(44, 40)
@@ -6396,7 +6495,11 @@ def _proj_row(self, e, favs):
         "QPushButton { background: rgba(59,130,246,18);"
         " border: 1px solid rgba(59,130,246,60); border-radius: 10px; }"
         " QPushButton:hover { background: rgba(59,130,246,40); }")
-    play.clicked.connect(lambda _=False, f=e["file"]: self._proj_play(f))
+    if not hasattr(self, "_proj_btn_by_file"):
+        self._proj_btn_by_file = {}
+    self._proj_btn_by_file[e["file"]] = play
+    play.clicked.connect(
+        lambda _=False, f=e["file"], pb=play: self._proj_toggle(f, pb))
     h.addWidget(play)
     keb = QPushButton("\u22ee")
     keb.setFixedSize(40, 40)
@@ -6420,6 +6523,7 @@ def _rebuild_projects(self):
         it = lay.takeAt(0)
         if it.widget():
             it.widget().deleteLater()
+    self._proj_btn_by_file = {}
     items = self.settings.get("history", [])
     favs = set(self.settings.get("proj_favs", []))
     arch = set(self.settings.get("proj_arch", []))
@@ -6443,6 +6547,10 @@ def _rebuild_projects(self):
             dur = float(it.get("duration", 0) or 0)
         except Exception:
             dur = 0.0
+        if dur <= 0:
+            _fp0 = str(it.get("output_path", "") or it.get("file", "") or "")
+            if _fp0:
+                dur = self._proj_dur_of(_fp0)
         fpath = str(it.get("output_path", "") or it.get("file", "") or "")
         try:
             if fpath and Path(fpath).exists():
@@ -6573,6 +6681,10 @@ MainWindow._proj_play = _proj_play
 MainWindow._proj_menu = _proj_menu
 MainWindow._proj_row = _proj_row
 MainWindow._rebuild_projects = _rebuild_projects
+MainWindow._register_export_success = _register_export_success
+MainWindow._proj_toggle = _proj_toggle
+MainWindow._proj_state_changed = _proj_state_changed
+MainWindow._proj_dur_of = _proj_dur_of
 
 
 def _audio_dur(self, path):
@@ -7453,6 +7565,7 @@ def _export_cloned(self, text, path, is_mp3):
         self.statusBar().showMessage("Ya hay una exportacion en curso...")
         return
     self._export_target = (path, is_mp3)
+    self._last_cloned_text = text
     dlg = ExportProgressDialog(
         self, "Exportando MP3..." if is_mp3 else "Exportando WAV...")
     dlg.show()
@@ -7487,6 +7600,9 @@ def _on_export_cloned_done(self, wav_path):
             self._cloned_export_dlg = None
         self.statusBar().showMessage(f"Audio exportado: {path}")
         print(f"💾 Audio clonado exportado: {path}")
+        _ct = str(getattr(self, "_last_cloned_text", "") or "")
+        _cv = str(getattr(self, "_selected_cloned", "") or "")
+        self._register_export_success(path, _ct, _cv)
     except Exception as e:
         if dlg is not None:
             dlg.close()
