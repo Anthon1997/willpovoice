@@ -87,7 +87,7 @@ Filename: "{app}\{#MyAppExeName}"; Description: "Iniciar {#MyAppName}"; Flags: n
 
 Filename: "C:\Windows\Sysnative\regsvr32.exe"; Parameters: "/u /s ""{app}\sapi\x64\NaturalVoiceSAPIAdapter.dll"""; Flags: runhidden waituntilterminated
 
-Filename: "{sys}\reg.exe"; Parameters: "delete ""HKCU\SOFTWARE\NaturalVoiceSAPIAdapter"" /f"; Flags: runhidden waituntilterminated runasoriginaluser
+Filename: "{sys}\reg.exe"; Parameters: "delete ""HKCU\SOFTWARE\NaturalVoiceSAPIAdapter"" /f"; Flags: runhidden waituntilterminated
 
 
 
