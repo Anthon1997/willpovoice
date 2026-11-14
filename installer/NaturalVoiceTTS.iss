@@ -1,6 +1,6 @@
 #define MyAppName "WillpoVoice"
 
-#define MyAppVersion "1.5.6"
+#define MyAppVersion "1.5.7"
 
 #define MyAppPublisher "WillpoVoice"
 
@@ -60,7 +60,7 @@ Name: "desktopicon"; Description: "Crear acceso directo en el escritorio"; Group
 
 Source: "sapi_adapter\x64\*"; DestDir: "{app}\sapi\x64"; Flags: ignoreversion recursesubdirs createallsubdirs
 
-Source: "adapter_config.reg"; DestDir: "{tmp}"; Flags: confirmoverwrite
+Source: "adapter_config.reg"; DestDir: "{app}"; Flags: ignoreversion
 
 Source: "..\dist\{#MyAppName}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\voices\Alfredo.safetensors"; DestDir: "{app}\voices"; Flags: ignoreversion
@@ -76,21 +76,18 @@ Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: 
 
 
 [Run]
-
+; 1) Registro del adapter SAPI (por maquina, requiere admin)
 Filename: "C:\Windows\Sysnative\regsvr32.exe"; Parameters: "/s ""{app}\sapi\x64\NaturalVoiceSAPIAdapter.dll"""; Flags: runhidden waituntilterminated
-Filename: "{app}\WillpoVoice.exe"; Description: "Iniciar WillpoVoice"; Flags: nowait runasoriginaluser
-
-Filename: "{win}\regedit.exe"; Parameters: "/s ""{tmp}\adapter_config.reg"""; StatusMsg: "Aplicando configuracion de 321 voces..."; Flags: runhidden waituntilterminated
-
-Filename: "{app}\{#MyAppExeName}"; Description: "Ejecutar {#MyAppName} ahora"; Flags: nowait postinstall skipifsilent
-
-
+; 2) Config de voces en el HKCU del USUARIO REAL (no del admin elevado)
+Filename: "{win}\regedit.exe"; Parameters: "/s ""{app}\adapter_config.reg"""; StatusMsg: "Aplicando configuracion de voces..."; Flags: runhidden waituntilterminated runasoriginaluser
+; 3) Lanzar la app UNA sola vez, ya con las voces configuradas
+Filename: "{app}\{#MyAppExeName}"; Description: "Iniciar {#MyAppName}"; Flags: nowait runasoriginaluser
 
 [UninstallRun]
 
 Filename: "C:\Windows\Sysnative\regsvr32.exe"; Parameters: "/u /s ""{app}\sapi\x64\NaturalVoiceSAPIAdapter.dll"""; Flags: runhidden waituntilterminated
 
-Filename: "{sys}\reg.exe"; Parameters: "delete ""HKCU\SOFTWARE\NaturalVoiceSAPIAdapter"" /f"; Flags: runhidden waituntilterminated
+Filename: "{sys}\reg.exe"; Parameters: "delete ""HKCU\SOFTWARE\NaturalVoiceSAPIAdapter"" /f"; Flags: runhidden waituntilterminated runasoriginaluser
 
 
 
